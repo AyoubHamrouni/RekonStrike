@@ -1,4 +1,5 @@
 import json
+from typing import Any, Dict, List
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
@@ -43,7 +44,7 @@ prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
-async def analyze_surface(settings: any, subdomains: list[str], live_hosts: list[dict]) -> dict:
+async def analyze_surface(settings: Any, subdomains: List[str], live_hosts: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Entry point for the Engine to call the Attack Surface Analyzer."""
     if not subdomains and not live_hosts:
         return {"anomalous_targets": []}

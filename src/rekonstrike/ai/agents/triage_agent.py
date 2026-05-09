@@ -1,5 +1,5 @@
 import json
-from typing import Literal
+from typing import Literal, Any, Dict, List
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import StateGraph, START, END
@@ -12,7 +12,7 @@ from ..factory import get_llm
 
 
 
-def _build_triage_graph(settings: any):
+def _build_triage_graph(settings: Any):
     llm = get_llm(settings, temperature=0.0)
     tools = [fetch_http_snippet]
     llm_with_tools = llm.bind_tools(tools)
@@ -91,7 +91,7 @@ def _build_triage_graph(settings: any):
     
     return workflow.compile()
 
-async def run_triage(settings: any, finding: dict, target_url: str) -> dict:
+async def run_triage(settings: Any, finding: Dict[str, Any], target_url: str) -> Dict[str, Any]:
     """Entry point for the Engine to call the Triage Agent."""
     triage_graph = _build_triage_graph(settings)
     

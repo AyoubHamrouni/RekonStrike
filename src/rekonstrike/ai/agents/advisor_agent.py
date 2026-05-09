@@ -1,4 +1,5 @@
 import json
+from typing import Any, Dict, List
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
@@ -53,8 +54,8 @@ prompt = ChatPromptTemplate.from_messages(
 )
 
 async def get_test_suggestions(
-    settings: any, host: dict, module: str, discovered_endpoints: list[str]
-) -> list[dict]:
+    settings: Any, host: Dict[str, Any], module: str, discovered_endpoints: List[str]
+) -> List[Dict[str, Any]]:
     """Entry point for the Engine to call the Testing Advisor."""
     llm = get_llm(settings, temperature=0.0)
     chain = prompt | llm | JsonOutputParser(pydantic_object=AdvisorOutput)
