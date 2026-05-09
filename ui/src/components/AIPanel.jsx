@@ -9,6 +9,8 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
   const [triageResult, setTriageResult] = useState(null);
   const [fpResult, setFpResult] = useState(null);
   const [scopeResult, setScopeResult] = useState(null);
+  const [advisorResult, setAdvisorResult] = useState(null);
+  const [reportResult, setReportResult] = useState(null);
   const [loading, setLoading] = useState(null);
 
   async function runSurface() {
@@ -67,6 +69,43 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
       if (!r.ok) throw new Error((await r.json()).detail || "Request failed");
       setScopeResult(await r.json());
       toast.success("Scope analysis complete");
+    } catch (e) { toast.error(e.message); }
+    finally { setLoading(null); }
+  }
+
+  async function runAdvisor() {
+    setLoading("advisor");
+    setAdvisorResult(null);
+    try {
+      const r = await fetch(`/targets/${targetId}/ai/advisor`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ module: "injection" }),
+      });
+      if (!r.ok) throw new Error((await r.json()).detail || "Request failed");
+      setAdvisorResult(await r.json());
+      toast.success("Testing suggestions generated");
+    } catch (e) { toast.error(e.message); }
+    finally { setLoading(null); }
+  }
+
+  async function runReportDrafter() {
+    const firstVuln = triageResult?.find(v => !v.likely_false_positive);
+    if (!firstVuln) {
+      toast.error("Run Triage first to find a validated vulnerability");
+      return;
+    }
+
+    setLoading("report");
+    setReportResult(null);
+    try {
+      const r = await fetch(`/targets/${targetId}/ai/report?vuln_id=${firstVuln.id}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+      });
+      if (!r.ok) throw new Error((await r.json()).detail || "Request failed");
+      const data = await r.json();
+      setReportResult(data.report);
+      navigator.clipboard.writeText(data.report);
+      toast.success("Report drafted and copied to clipboard");
     } catch (e) { toast.error(e.message); }
     finally { setLoading(null); }
   }
@@ -255,6 +294,61 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
           )}
         </div>
       )}
+      {/* Section 5: Manual Test Advisor */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-text">Manual Test Advisor</span>
+          <button onClick={runAdvisor} disabled={loading === "advisor"}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-accent text-white text-[10px] font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors">
+            {loading === "advisor" ? <Loader2 size={11} className="animate-spin" /> : null}
+            {loading === "advisor" ? "Thinking..." : "Get Suggestions"}
+          </button>
+        </div>
+        {advisorResult && (
+          <div className="space-y-2">
+            {advisorResult.map((a, i) => (
+              <div key={i} className="text-[10px] text-text-dim bg-surface-2 p-3 rounded-lg border border-border/50">
+                <div className="font-mono text-accent mb-1">{a.url}</div>
+                <div className="space-y-1">
+                  {a.suggestions.map((s, si) => (
+                    <div key={si} className="flex gap-1.5">
+                      <div className="w-1 h-1 rounded-full bg-accent mt-1.5 shrink-0" />
+                      <div>{s}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {!advisorResult && (
+          <div className="text-[10px] text-text-dim italic bg-surface-2 p-2 rounded-lg border border-border/50">
+            AI will analyze the technology stack and suggest manual testing vectors for the Manual Workspace.
+          </div>
+        )}
+      </div>
+
+      {/* Section 6: Report Drafter */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-text">Report Drafter</span>
+          <button onClick={runReportDrafter} disabled={loading === "report"}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-accent text-white text-[10px] font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors">
+            {loading === "report" ? <Loader2 size={11} className="animate-spin" /> : null}
+            {loading === "report" ? "Drafting..." : "Draft Report"}
+          </button>
+        </div>
+        {reportResult && (
+          <div className="bg-surface-2 p-3 rounded-lg border border-border/50 max-h-40 overflow-y-auto">
+            <pre className="text-[9px] text-text-dim whitespace-pre-wrap">{reportResult}</pre>
+          </div>
+        )}
+        {!reportResult && (
+          <div className="text-[10px] text-text-dim italic bg-surface-2 p-2 rounded-lg border border-border/50">
+            Synthesize validated findings into a professional security report in Markdown format.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

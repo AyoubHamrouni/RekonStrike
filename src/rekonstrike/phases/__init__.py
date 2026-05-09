@@ -13,6 +13,7 @@ from . import (
     js_analysis,
     vuln_scan,
     roi_scoring,
+    intelligence,
 )
 
 __all__ = ["phase", "get_registered_phases"]

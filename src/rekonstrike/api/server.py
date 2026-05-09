@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .. import __version__
 from .deps import settings, db, get_task_manager, verify_auth
-from .routers import scans, targets
+from .routers import scans, targets, ai
 from ..wordlists import ensure_wordlists
 
 logger = logging.getLogger(__name__)
@@ -78,6 +78,7 @@ if STATIC_DIR.exists():
 
 app.include_router(scans.router)
 app.include_router(targets.router)
+app.include_router(ai.router)
 
 
 # ─── Routes ───────────────────────────────────────────────────────────────────

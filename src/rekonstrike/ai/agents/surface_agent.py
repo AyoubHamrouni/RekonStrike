@@ -9,25 +9,32 @@ class AnomalousTarget(BaseModel):
     subdomain: str = Field(
         description="The subdomain identified as anomalous or high-value."
     )
-    reason: str = Field(
-        description="Why this target is interesting (e.g. 'Staging environment', 'Exposed admin panel')."
+    reasoning: str = Field(
+        description="Step-by-step explanation of why this target matches the risk heuristics."
     )
     priority: int = Field(description="Priority rank 1-5 (1 being highest priority).")
 
 
 class SurfaceAnalysisOutput(BaseModel):
+    analysis_summary: str = Field(
+        description="Overall assessment of the attack surface (e.g., 'Heavy reliance on AWS...')."
+    )
     anomalous_targets: list[AnomalousTarget]
 
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 system_prompt = (
-    "You are a senior penetration tester analyzing an external attack surface. "
-    "Given a list of discovered subdomains and live hosts, identify the top 5 most 'anomalous' "
-    "or high-value targets that warrant manual investigation.\n"
-    "Look for patterns indicating development, staging, internal tools, VPNs, or exposed APIs "
-    "(e.g., 'dev.api', 'jira', 'staging', 'corp', 'v2').\n"
-    "Respond with a JSON array of anomalous targets."
+    "You are an attack surface heuristic engine. Analyze the provided external footprint "
+    "(subdomains and live hosts) to identify the top 5 high-value targets for immediate manual testing.\n\n"
+    "Prioritize targets matching these risk heuristics:\n"
+    "- Non-production environments (dev, stg, uat, test, beta).\n"
+    "- Internal or administrative portals (admin, corp, int, portal, vpn).\n"
+    "- Direct API endpoints (api-v1, graphql, swagger).\n"
+    "- Legacy infrastructure (v1, old, legacy).\n\n"
+    "CONSTRAINTS:\n"
+    "- ONLY select targets that exist in the provided input data. Do not hallucinate URLs.\n"
+    "- MUST provide exactly 5 targets, unless fewer than 5 exist in the dataset.\n"
 )
 
 prompt = ChatPromptTemplate.from_messages(

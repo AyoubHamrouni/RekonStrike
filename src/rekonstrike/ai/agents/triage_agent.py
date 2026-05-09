@@ -22,17 +22,26 @@ async def evaluate_finding(state: TriageState):
     finding = state["finding"]
 
     system_prompt = (
-        "You are a senior bug bounty hunter triaging a Nuclei finding. "
-        "Your goal is to determine if this finding is a false positive and assign a priority rank.\n"
-        "You may use the `fetch_http_snippet` tool if you need to manually inspect the live HTTP response "
-        "to confirm the vulnerability (e.g. checking if a leaked secret is actually present, or if it's a 404 page).\n"
-        "If you have enough information or have already used tools, output a final JSON block in this exact format "
-        "(do NOT use markdown fences around the JSON):\n"
+        "You are an automated triage engine for an offensive security pipeline. "
+        "Evaluate the provided vulnerability finding against the target URL.\n\n"
+        "Follow these steps precisely:\n"
+        "1. Analyze the finding data. Is it a known generic signature (e.g., a default 404 page falsely flagged as an information disclosure)?\n"
+        "2. If necessary, use the `fetch_http_snippet` tool to pull the live DOM/Headers to verify the claim.\n"
+        "3. Formulate your reasoning step-by-step.\n\n"
+        "CONSTRAINTS:\n"
+        "- DO NOT assume a finding is valid just because the scanner flagged it. Be highly skeptical.\n"
+        "- DO NOT invent evidence. If you cannot confirm via tools, state that confidence is low.\n"
+        "- DO NOT wrap your output in markdown formatting (no ```json).\n\n"
+        "Output strictly in this JSON schema:\n"
         "{\n"
-        '  "priority_rank": 1-5,\n'
-        '  "confidence": 0.0-1.0,\n'
+        '  "reasoning_steps": [\n'
+        '    "Step 1: Analyzed scanner output...",\n'
+        '    "Step 2: Confirmed..."\n'
+        '  ],\n'
         '  "likely_false_positive": bool,\n'
-        '  "triage_note": "short explanation"\n'
+        '  "confidence": 0.0-1.0,\n'
+        '  "priority_rank": 1-5,\n'
+        '  "triage_note": "Concise technical justification."\n'
         "}"
     )
 
@@ -70,6 +79,7 @@ def should_continue(state: TriageState) -> Literal["tools", "__end__"]:
     except Exception:
         # Fallback if parsing fails
         state["final_verdict"] = {
+            "reasoning_steps": ["Failed to parse AI output."],
             "priority_rank": 999,
             "confidence": 0.5,
             "likely_false_positive": False,
@@ -109,6 +119,7 @@ async def run_triage(finding: dict, target_url: str) -> dict:
     if not verdict:
         # Fallback
         verdict = {
+            "reasoning_steps": ["Execution failed or yielded no verdict."],
             "priority_rank": 999,
             "confidence": 0.5,
             "likely_false_positive": False,

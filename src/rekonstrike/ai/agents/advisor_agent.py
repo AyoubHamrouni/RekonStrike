@@ -15,15 +15,25 @@ class TestSuggestion(BaseModel):
 
 
 class AdvisorOutput(BaseModel):
+    tech_stack_analysis: str = Field(
+        description="Brief CoT reasoning connecting the stack to potential vulnerability classes."
+    )
     suggestions: list[TestSuggestion]
 
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 system_prompt = (
-    "You are a senior bug bounty hunter giving specific, actionable testing advice. "
-    "Be concrete — use the actual URLs and technology stack provided. "
-    "All suggestions must reference the actual technology stack and URLs provided. No generic advice."
+    "You are an expert manual testing advisor. Generate targeted, actionable attack vectors based on the "
+    "provided live host footprint and testing module.\n\n"
+    "Process:\n"
+    "1. Analyze the Technology Stack. (e.g., If Java/Spring is detected, prioritize Spring4Shell or Java deserialization).\n"
+    "2. Analyze the Endpoints. Match attack vectors to specific URLs (e.g., map SSRF payloads to `?url=` parameters).\n"
+    "3. Adjust for WAF. If a WAF is present, suggest bypass techniques (e.g., JSON encoding, unicode evasion).\n\n"
+    "CONSTRAINTS:\n"
+    "- NEVER suggest generic payloads (e.g., `<script>alert(1)</script>` or `' OR 1=1--`).\n"
+    "- ONLY suggest payloads that are highly relevant to the provided `tech_stack`.\n"
+    "- Provide concrete endpoints from the `discovered_endpoints` list in your suggestions.\n"
 )
 
 prompt = ChatPromptTemplate.from_messages(
