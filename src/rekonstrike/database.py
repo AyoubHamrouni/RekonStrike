@@ -25,7 +25,10 @@ from sqlalchemy import (
     select,
     func,
 )
-from pgvector.sqlalchemy import Vector
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    Vector = None
 
 from .config import Settings
 
@@ -349,17 +352,22 @@ class ScanArtifact(Base):
     session = relationship("ScanSession", back_populates="artifacts")
 
 
-class AIVectorMemory(Base):
-    __tablename__ = "ai_vector_memory"
-    
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    target_id: Mapped[Optional[int]] = mapped_column(ForeignKey("scope_targets.id", ondelete="CASCADE"))
-    session_id: Mapped[Optional[int]] = mapped_column(ForeignKey("scan_sessions.id", ondelete="CASCADE"))
-    memory_type: Mapped[str] = mapped_column(String(50)) # e.g., "finding", "summary", "baseline"
-    content: Mapped[str] = mapped_column(Text)
-    embedding = mapped_column(Vector(1536)) # Assuming OpenAI embeddings
-    metadata_json: Mapped[Optional[dict]] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+if Vector:
+    class AIVectorMemory(Base):
+        __tablename__ = "ai_vector_memory"
+        
+        id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+        target_id: Mapped[Optional[int]] = mapped_column(ForeignKey("scope_targets.id", ondelete="CASCADE"))
+        session_id: Mapped[Optional[int]] = mapped_column(ForeignKey("scan_sessions.id", ondelete="CASCADE"))
+        memory_type: Mapped[str] = mapped_column(String(50)) # e.g., "finding", "summary", "baseline"
+        content: Mapped[str] = mapped_column(Text)
+        embedding = mapped_column(Vector(1536)) # Assuming OpenAI embeddings
+        metadata_json: Mapped[Optional[dict]] = mapped_column(JSON)
+        created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+else:
+    class AIVectorMemory(Base):
+        __tablename__ = "ai_vector_memory_disabled"
+        id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
 
 # ─── Engine & Session ─────────────────────────────────────────────────────────
 

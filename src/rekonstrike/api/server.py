@@ -2,7 +2,8 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Response
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -87,3 +88,12 @@ app.include_router(ai.router)
 @app.get("/health")
 async def health():
     return {"status": "ok", "version": __version__, "python": "3.14+"}
+
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    index_path = STATIC_DIR / "index.html"
+    if index_path.exists():
+        # If it's an asset, the mount already handled it
+        # If it's a route (like /targets), return index.html for SPA
+        return FileResponse(index_path)
+    return {"detail": "Frontend not built. Run 'npm run build' in ui directory."}

@@ -37,7 +37,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 
 EXPOSE 8000
 
-CMD ["uvicorn", "rekonstrike.api.server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python3", "-m", "rekonstrike", "serve", "--host", "0.0.0.0", "--port", "8000"]
 
 # ── Stage 3: Nginx (UI serving) ──────────────────────────────────────────
 FROM nginx:alpine AS ui

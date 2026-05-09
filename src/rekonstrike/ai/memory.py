@@ -2,8 +2,12 @@ import logging
 from typing import List, Optional, Dict, Any
 import json
 
-from langchain_openai import OpenAIEmbeddings
-from langchain_postgres import PGVector
+try:
+    from langchain_openai import OpenAIEmbeddings
+    from langchain_postgres import PGVector
+except ImportError:
+    OpenAIEmbeddings = None
+    PGVector = None
 from langchain_core.documents import Document
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,21 +21,26 @@ class MemoryService:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-small",
-            api_key=settings.ai_api_keys.get("openai")
-        )
-        # The connection string for langchain-postgres needs to be synchronous for now
-        # because PGVector in langchain-postgres often uses psycopg2/psycopg under the hood
-        # unless configured for async.
-        self.connection_string = settings.db_url.replace("postgresql+asyncpg://", "postgresql://")
+        self.enabled = OpenAIEmbeddings is not None and PGVector is not None
         
-        self.vector_store = PGVector(
-            embeddings=self.embeddings,
-            collection_name="ai_memory",
-            connection=self.connection_string,
-            use_jsonb=True,
-        )
+        if self.enabled:
+            self.embeddings = OpenAIEmbeddings(
+                model="text-embedding-3-small",
+                api_key=settings.ai_api_keys.get("openai")
+            )
+            # The connection string for langchain-postgres needs to be synchronous for now
+            # because PGVector in langchain-postgres often uses psycopg2/psycopg under the hood
+            # unless configured for async.
+            self.connection_string = settings.db_url.replace("postgresql+asyncpg://", "postgresql://")
+            
+            self.vector_store = PGVector(
+                embeddings=self.embeddings,
+                collection_name="ai_memory",
+                connection=self.connection_string,
+                use_jsonb=True,
+            )
+        else:
+            logger.warning("MemoryService disabled: langchain-postgres or langchain-openai not installed.")
 
     async def add_memory(
         self, 
@@ -42,6 +51,9 @@ class MemoryService:
         metadata: Optional[Dict[str, Any]] = None
     ):
         """Adds a new memory to the vector store."""
+        if not self.enabled:
+            return
+
         doc = Document(
             page_content=content,
             metadata={
@@ -66,6 +78,9 @@ class MemoryService:
         target_id: Optional[int] = None
     ) -> List[Document]:
         """Searches for similar memories in the vector store."""
+        if not self.enabled:
+            return []
+            
         filter_dict = {}
         if memory_type:
             filter_dict["memory_type"] = memory_type

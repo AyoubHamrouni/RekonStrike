@@ -32,33 +32,33 @@ RekonStrike v2 is a professional-grade offensive security framework that separat
     alembic upgrade head
     ```
 
-### Running the Application
-- **CLI Scan:**
+### Running the Application (Unified Mode)
+The simplest way to run RekonStrike is using the unified server, which hosts both the API and the Web UI.
+
+- **Option A: One-Click Script (Recommended)**
     ```bash
-    # Run a full scan (requires 'pip install -e .')
-    rekonstrike scan example.com
-    # Run specific phases (e.g., Passive OSINT)
-    rekonstrike scan example.com -p 1
+    ./run.sh
     ```
-- **API Server:**
+- **Option B: CLI Unified Server**
     ```bash
-    uvicorn rekonstrike.api.server:app --host 0.0.0.0 --port 8000 --reload
+    # Serve Web UI + API on http://0.0.0.0:8000
+    rekonstrike serve --port 8000 --reload
     ```
-- **Background Worker:**
-    ```bash
-    python -m rekonstrike worker
-    ```
-- **Full Stack (Docker):**
+- **Option C: Docker (Full Stack)**
     ```bash
     docker compose up -d
     ```
 
-### Frontend Setup
-```bash
-cd ui
-npm install
-npm run dev
-```
+### Component-Specific Running (Development)
+If you are developing and need separate hot-reloading:
+- **API Server Only:**
+    ```bash
+    uvicorn rekonstrike.api.server:app --host 0.0.0.0 --port 8000 --reload
+    ```
+- **Frontend Dev Server:**
+    ```bash
+    cd ui && npm run dev
+    ```
 
 ### Testing
 ```bash

@@ -216,5 +216,38 @@ def version():
     print(f"Python {sys.version}")
 
 
+@app.command()
+def serve(
+    host: str = typer.Option("0.0.0.0", "--host", help="Host to bind"),
+    port: int = typer.Option(8000, "--port", help="Port to bind"),
+    reload: bool = typer.Option(False, "--reload", help="Enable auto-reload"),
+    config_path: Optional[Path] = typer.Option(
+        None, "-c", "--config", help="Path to config YAML file"
+    ),
+):
+    """Start the unified Web UI and API server."""
+    import uvicorn
+    from .config import load_settings
+
+    settings = load_settings(str(config_path) if config_path else None)
+    
+    out.banner()
+    out.info(f"Starting RekonStrike Unified Server on http://{host}:{port}")
+    out.info("AI Agents: Initializing...")
+    
+    # Set environment variables for the uvicorn process
+    if config_path:
+        import os
+        os.environ["RS_CONFIG"] = str(config_path)
+
+    uvicorn.run(
+        "rekonstrike.api.server:app",
+        host=host,
+        port=port,
+        reload=reload,
+        log_level="info",
+    )
+
+
 def main():
     app()
