@@ -1,0 +1,54 @@
+services:
+  api:
+    build: .
+    container_name: rekonstrike-api
+    ports:
+      - "8000:8000"
+    environment:
+      RS_DB_TYPE: postgresql
+      RS_DB_URL: postgresql+asyncpg://postgres:postgres@db:5432/rekonstrike
+      RS_REDIS_URL: redis://redis:6379/0
+      RS_TOOL_MODE: docker
+    volumes:
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - rekonstrike
+
+  db:
+    image: postgres:17-alpine
+    container_name: rekonstrike-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rekonstrike
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - rekonstrike
+
+  redis:
+    image: redis:7-alpine
+    container_name: rekonstrike-redis
+    restart: unless-stopped
+    networks:
+      - rekonstrike
+
+volumes:
+  pgdata:
+
+networks:
+  rekonstrike:
+    driver: bridge
