@@ -49,7 +49,7 @@ class Phase:
         if not subdomains:
             return
 
-        result = await analyze_surface(subdomains, live_hosts)
+        result = await analyze_surface(self.ctx.settings, subdomains, live_hosts)
         anomalies = result.get("anomalous_targets", [])
         
         if anomalies:
@@ -88,7 +88,7 @@ class Phase:
             }
             
             # Call the triage agent
-            result = await run_triage(finding_dict, url)
+            result = await run_triage(self.ctx.settings, finding_dict, url)
             
             # Update the vulnerability record with AI verdict
             async with self.ctx.db_session.begin():
@@ -115,6 +115,7 @@ class Phase:
         for host in hosts:
             # For each host, get suggestions for a common module like 'injection'
             suggestions = await get_test_suggestions(
+                self.ctx.settings,
                 host.__dict__, 
                 module="injection", 
                 discovered_endpoints=[]

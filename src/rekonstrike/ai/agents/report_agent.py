@@ -1,9 +1,10 @@
 import logging
 from typing import Dict, Any, Optional
 
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+
+from ..factory import get_llm
 
 logger = logging.getLogger(__name__)
 
@@ -12,35 +13,56 @@ class ReportDrafter:
 
     def __init__(self, settings: Any):
         self.settings = settings
-        self.llm = ChatOpenAI(
-            model=settings.default_ai_model,
-            openai_api_key=settings.ai_api_keys.get("openai"),
-            temperature=0.3
-        )
+        self.llm = get_llm(settings, temperature=0.3)
         
         self.report_prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are an expert security technical writer. Synthesize the provided raw vulnerability data and AI triage notes into a professional bug bounty report.
+            ("system", """You are an expert security technical writer and senior bug bounty researcher. Your objective is to synthesize raw vulnerability data into a professional, submission-ready bug bounty report.
 
-Follow this exact Markdown template structure:
-# Title: [A concise, actionable title]
+Follow this exact Professional Markdown Template:
+
+# [Vulnerability Type] in [Component/Endpoint]
+
+## Summary
+[Provide a 1-2 sentence description. Format: "[Vulnerability Type] in [Component] allows [Attacker] to [Impact] via [Attack Vector]"]
+
+## Severity
+- **CVSS Score:** [Calculate based on metrics, e.g., 7.5 (High)]
+- **Vector:** [Provide valid CVSS:3.1 vector string]
 
 ## Description
-[Objective explanation of the vulnerability and its root cause. Incorporate insights from the {triage_note}.]
+[A concise technical explanation of the root cause. Incorporate insights from the {triage_note} and reference relevant CWEs.]
 
-## Impact
-[Realistic assessment of what an attacker could achieve. Do not exaggerate. Rely only on the provided {details}.]
+## Affected Asset
+- **URL:** {url}
+- **Parameter:** [Identify from {details} or state 'N/A']
+- **Method:** [Identify from {details}, e.g., GET/POST]
 
 ## Steps to Reproduce
-1. [Clear, step-by-step instructions]
-2. [Include specific HTTP requests, cURL commands, or payloads from the {details}]
+1. [Step 1: Technical prerequisite]
+2. [Step 2: Specific action/payload injection]
+3. [Step 3: Observation of the vulnerability]
 
-## Remediation
-[Actionable fix tailored to the vulnerability class.]
+## Proof of Concept (PoC)
+### Evidence
+> [!IMPORTANT]
+> [REPLACE THIS LINE WITH SCREENSHOTS/VIDEOS]
+> Please attach your proof-of-concept media here (Screenshots, Screen Recordings).
+
+### HTTP Request
+```http
+[Provide a representative HTTP request snippet if available in {details}]
+```
+
+## Impact
+[Clearly explain the business and security impact. What can an attacker achieve?]
+
+## Recommended Remediation
+[Provide specific, actionable technical advice to patch the root cause.]
 
 CONSTRAINTS:
-- DO NOT invent impact scenarios (e.g., do not claim RCE if the finding is just an exposed API key).
-- DO NOT include conversational filler ("Here is your report:"). Output ONLY the Markdown.
-- Ensure the tone is clinical and objective."""),
+- DO NOT invent impact scenarios; use only the provided {details}.
+- DO NOT include conversational filler. Output ONLY the Markdown.
+- Use precise, clinical, and objective language."""),
             ("user", """Draft a report for the following finding:
 
 Target URL: {url}

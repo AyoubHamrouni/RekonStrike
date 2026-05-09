@@ -12,6 +12,7 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
   const [advisorResult, setAdvisorResult] = useState(null);
   const [reportResult, setReportResult] = useState(null);
   const [loading, setLoading] = useState(null);
+  const [isEditingReport, setIsEditingReport] = useState(false);
 
   async function runSurface() {
     setLoading("surface");
@@ -104,10 +105,15 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
       if (!r.ok) throw new Error((await r.json()).detail || "Request failed");
       const data = await r.json();
       setReportResult(data.report);
-      navigator.clipboard.writeText(data.report);
-      toast.success("Report drafted and copied to clipboard");
+      setIsEditingReport(true);
+      toast.success("Report draft generated");
     } catch (e) { toast.error(e.message); }
     finally { setLoading(null); }
+  }
+
+  function copyReport() {
+    navigator.clipboard.writeText(reportResult);
+    toast.success("Report copied to clipboard");
   }
 
   function PriorityBadge({ rank }) {
@@ -309,11 +315,14 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
             {advisorResult.map((a, i) => (
               <div key={i} className="text-[10px] text-text-dim bg-surface-2 p-3 rounded-lg border border-border/50">
                 <div className="font-mono text-accent mb-1">{a.url}</div>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {a.suggestions.map((s, si) => (
-                    <div key={si} className="flex gap-1.5">
-                      <div className="w-1 h-1 rounded-full bg-accent mt-1.5 shrink-0" />
-                      <div>{s}</div>
+                    <div key={si} className="border-l border-accent/30 pl-2 py-1">
+                      <div className="text-text font-medium text-[11px] mb-0.5">{s.test}</div>
+                      <div className="text-[9px] mb-1 opacity-80">{s.reason}</div>
+                      <div className="bg-surface p-1 rounded font-mono text-[9px] text-accent-light break-all select-all cursor-copy" title="Click to copy payload">
+                        {s.payload_hint}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -332,20 +341,38 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium text-text">Report Drafter</span>
-          <button onClick={runReportDrafter} disabled={loading === "report"}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-accent text-white text-[10px] font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors">
-            {loading === "report" ? <Loader2 size={11} className="animate-spin" /> : null}
-            {loading === "report" ? "Drafting..." : "Draft Report"}
-          </button>
+          <div className="flex gap-2">
+            {reportResult && (
+              <button onClick={copyReport} className="px-2 py-1.5 rounded-lg bg-surface-3 text-text text-[10px] font-medium hover:bg-surface-4 transition-colors">
+                Copy
+              </button>
+            )}
+            <button onClick={runReportDrafter} disabled={loading === "report"}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-accent text-white text-[10px] font-medium hover:bg-accent-hover disabled:opacity-50 transition-colors">
+              {loading === "report" ? <Loader2 size={11} className="animate-spin" /> : null}
+              {loading === "report" ? "Drafting..." : "Draft Report"}
+            </button>
+          </div>
         </div>
         {reportResult && (
-          <div className="bg-surface-2 p-3 rounded-lg border border-border/50 max-h-40 overflow-y-auto">
-            <pre className="text-[9px] text-text-dim whitespace-pre-wrap">{reportResult}</pre>
+          <div className="space-y-2">
+            <div className="bg-surface-2 p-1 rounded-lg border border-border/50">
+              <textarea
+                value={reportResult}
+                onChange={(e) => setReportResult(e.target.value)}
+                className="w-full h-48 bg-transparent text-[10px] text-text-dim p-2 focus:outline-none font-mono resize-none"
+                placeholder="Edit your report here..."
+              />
+            </div>
+            <div className="text-[9px] text-text-dim flex items-center gap-1">
+              <CheckCircle size={10} className="text-accent" />
+              <span>You can manually add Proof-of-Concept links or screenshots above.</span>
+            </div>
           </div>
         )}
         {!reportResult && (
           <div className="text-[10px] text-text-dim italic bg-surface-2 p-2 rounded-lg border border-border/50">
-            Synthesize validated findings into a professional security report in Markdown format.
+            Synthesize validated findings into a professional security report. You can edit and add PoC media before copying.
           </div>
         )}
       </div>

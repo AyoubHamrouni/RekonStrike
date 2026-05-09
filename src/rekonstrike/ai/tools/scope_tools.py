@@ -1,9 +1,10 @@
 import logging
 from typing import List, Dict, Any
 
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
+
+from ..factory import get_llm
 
 logger = logging.getLogger(__name__)
 
@@ -12,11 +13,7 @@ class ScopeAdvisor:
 
     def __init__(self, settings: Any):
         self.settings = settings
-        self.llm = ChatOpenAI(
-            model=settings.default_ai_model,
-            openai_api_key=settings.ai_api_keys.get("openai"),
-            temperature=0
-        )
+        self.llm = get_llm(settings, temperature=0.0)
         
         self.scope_prompt = ChatPromptTemplate.from_messages([
             ("system", """You are a scope analyst for a bug bounty program.

@@ -1,5 +1,4 @@
 import json
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
@@ -22,7 +21,7 @@ class SurfaceAnalysisOutput(BaseModel):
     anomalous_targets: list[AnomalousTarget]
 
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+from ..factory import get_llm
 
 system_prompt = (
     "You are an attack surface heuristic engine. Analyze the provided external footprint "
@@ -44,13 +43,13 @@ prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
-chain = prompt | llm | JsonOutputParser(pydantic_object=SurfaceAnalysisOutput)
-
-
-async def analyze_surface(subdomains: list[str], live_hosts: list[dict]) -> dict:
+async def analyze_surface(settings: any, subdomains: list[str], live_hosts: list[dict]) -> dict:
     """Entry point for the Engine to call the Attack Surface Analyzer."""
     if not subdomains and not live_hosts:
         return {"anomalous_targets": []}
+
+    llm = get_llm(settings, temperature=0.0)
+    chain = prompt | llm | JsonOutputParser(pydantic_object=SurfaceAnalysisOutput)
 
     # Cap inputs to prevent token limit issues
     sub_text = "\\n".join(subdomains[:500])

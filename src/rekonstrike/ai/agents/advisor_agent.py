@@ -1,5 +1,4 @@
 import json
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
@@ -21,7 +20,7 @@ class AdvisorOutput(BaseModel):
     suggestions: list[TestSuggestion]
 
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+from ..factory import get_llm
 
 system_prompt = (
     "You are an expert manual testing advisor. Generate targeted, actionable attack vectors based on the "
@@ -53,13 +52,13 @@ prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
-chain = prompt | llm | JsonOutputParser(pydantic_object=AdvisorOutput)
-
-
 async def get_test_suggestions(
-    host: dict, module: str, discovered_endpoints: list[str]
+    settings: any, host: dict, module: str, discovered_endpoints: list[str]
 ) -> list[dict]:
     """Entry point for the Engine to call the Testing Advisor."""
+    llm = get_llm(settings, temperature=0.0)
+    chain = prompt | llm | JsonOutputParser(pydantic_object=AdvisorOutput)
+
     tech_stack = ", ".join(host.get("technologies", [])[:10])
     capped_endpoints = "\\n".join(discovered_endpoints[:20])
 

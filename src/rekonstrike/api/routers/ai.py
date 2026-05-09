@@ -29,7 +29,7 @@ async def ai_surface_analysis(
     if not subdomains:
         raise HTTPException(status_code=400, detail="No subdomains found for this target")
         
-    result = await analyze_surface(subdomains, live_hosts)
+    result = await analyze_surface(settings, subdomains, live_hosts)
     return result
 
 @router.post("/triage")
@@ -59,7 +59,7 @@ async def ai_vuln_triage(
             "matched_at": vuln.matched_at
         }
         
-        verdict = await run_triage(finding_dict, url)
+        verdict = await run_triage(settings, finding_dict, url)
         results.append({
             "id": vuln.id,
             "name": vuln.name,
@@ -126,6 +126,7 @@ async def ai_test_advisor(
     for host in items:
         # Get suggestions based on tech stack
         suggestions = await get_test_suggestions(
+            settings,
             {"url": host.url, "technologies": host.technologies},
             module=module,
             discovered_endpoints=[]
