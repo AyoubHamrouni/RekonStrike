@@ -1,4 +1,5 @@
 """Task queue — ARQ/Redis for persistent job management with fallback to direct execution."""
+
 import asyncio
 import logging
 from typing import Optional, Callable
@@ -8,7 +9,10 @@ logger = logging.getLogger(__name__)
 
 # ─── ARQ Worker Functions ─────────────────────────────────────────────────────
 
-async def scan_task(ctx: dict, target: str, target_type: str, phases: Optional[list[int]] = None):
+
+async def scan_task(
+    ctx: dict, target: str, target_type: str, phases: Optional[list[int]] = None
+):
     """ARQ worker function: run a scan pipeline."""
     from ..config import Settings
     from ..database import Database
@@ -27,6 +31,7 @@ async def scan_task(ctx: dict, target: str, target_type: str, phases: Optional[l
 
 # ─── Task Manager ──────────────────────────────────────────────────────────────
 
+
 class TaskManager:
     """Enqueues scan jobs via ARQ/Redis, falls back to direct asyncio tasks in dev."""
 
@@ -40,10 +45,13 @@ class TaskManager:
         if self.redis_url:
             try:
                 from arq.connections import create_pool
+
                 self._pool = await create_pool(self.redis_url)
                 logger.info("ARQ connected: %s", self.redis_url)
             except Exception as e:
-                logger.warning("Redis unavailable (%s), falling back to direct execution", e)
+                logger.warning(
+                    "Redis unavailable (%s), falling back to direct execution", e
+                )
                 self._pool = None
 
     async def close(self):
@@ -53,14 +61,20 @@ class TaskManager:
             t.cancel()
         self._direct_tasks.clear()
 
-    async def enqueue_scan(self, session_id: int, target: str, target_type: str,
-                           phases: Optional[list[int]] = None,
-                           on_event: Optional[Callable] = None,
-                           settings_dict: Optional[dict] = None) -> bool:
+    async def enqueue_scan(
+        self,
+        session_id: int,
+        target: str,
+        target_type: str,
+        phases: Optional[list[int]] = None,
+        on_event: Optional[Callable] = None,
+        settings_dict: Optional[dict] = None,
+    ) -> bool:
         """Enqueue a scan. Returns True if queued via ARQ, False if running directly."""
         sd = settings_dict or self._settings
         if self._pool:
             from arq.connections import ArqRedis
+
             pool: ArqRedis = self._pool
             job = await pool.enqueue_job(
                 "scan_task",
@@ -81,6 +95,7 @@ class TaskManager:
         if self._pool:
             try:
                 from arq.connections import ArqRedis
+
                 pool: ArqRedis = self._pool
                 jobs = await pool.all_job_results()
                 for jr in jobs:
@@ -95,9 +110,15 @@ class TaskManager:
             return True
         return False
 
-    async def _run_direct(self, session_id: int, target: str, target_type: str,
-                          phases: Optional[list[int]], on_event: Optional[Callable],
-                          settings_dict: dict):
+    async def _run_direct(
+        self,
+        session_id: int,
+        target: str,
+        target_type: str,
+        phases: Optional[list[int]],
+        on_event: Optional[Callable],
+        settings_dict: dict,
+    ):
         from ..config import Settings
         from ..database import Database
         from ..engine import Pipeline
@@ -111,8 +132,12 @@ class TaskManager:
 
         async def _run():
             try:
-                await pipeline.run(target=target, target_type=target_type,
-                                   phases=phases, event_callback=on_event)
+                await pipeline.run(
+                    target=target,
+                    target_type=target_type,
+                    phases=phases,
+                    event_callback=on_event,
+                )
             finally:
                 await db.close()
                 self._direct_tasks.pop(session_id, None)
@@ -125,7 +150,9 @@ class TaskManager:
 _manager: Optional[TaskManager] = None
 
 
-def get_task_manager(redis_url: str = "", settings: Optional[dict] = None) -> TaskManager:
+def get_task_manager(
+    redis_url: str = "", settings: Optional[dict] = None
+) -> TaskManager:
     global _manager
     if _manager is None:
         _manager = TaskManager(redis_url, settings)

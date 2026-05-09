@@ -1,4 +1,5 @@
 """Tool wrappers for all integrated reconnaissance tools"""
+
 from .base import BaseTool
 
 
@@ -13,6 +14,7 @@ class Subfinder(BaseTool):
 
 class AmassIntelligence(BaseTool):
     """Amass intel for company-level ASN/domain discovery"""
+
     name = "amass"
     binary = "amass"
 
@@ -32,12 +34,22 @@ class Httpx(BaseTool):
 
     async def probe(self, stdin_data: str, threads: int = 50) -> "ToolResult":
         args = [
-            "-silent", "-json", "-t", str(threads),
-            "-sc", "-cl", "-title", "-web-server",
-            "-tech-detect", "-csp-probe",
-            "-status-code", "-content-length",
-            "-timeout", "5",
-            "-retries", "1",
+            "-silent",
+            "-json",
+            "-t",
+            str(threads),
+            "-sc",
+            "-cl",
+            "-title",
+            "-web-server",
+            "-tech-detect",
+            "-csp-probe",
+            "-status-code",
+            "-content-length",
+            "-timeout",
+            "5",
+            "-retries",
+            "1",
         ]
         return await self.runner.run_pipe(self.binary, args, stdin_data)
 
@@ -46,14 +58,22 @@ class Nuclei(BaseTool):
     name = "nuclei"
     binary = "nuclei"
 
-    async def scan(self, targets: str, concurrency: int = 25,
-                   rate_limit: int = 150,
-                   severity: str = "critical,high,medium,low") -> "ToolResult":
+    async def scan(
+        self,
+        targets: str,
+        concurrency: int = 25,
+        rate_limit: int = 150,
+        severity: str = "critical,high,medium,low",
+    ) -> "ToolResult":
         args = [
-            "-silent", "-json",
-            "-c", str(concurrency),
-            "-rl", str(rate_limit),
-            "-severity", severity,
+            "-silent",
+            "-json",
+            "-c",
+            str(concurrency),
+            "-rl",
+            str(rate_limit),
+            "-severity",
+            severity,
             "-nt",
         ]
         return await self.runner.run_pipe(self.binary, args, targets)
@@ -82,8 +102,19 @@ class DNSx(BaseTool):
     binary = "dnsx"
 
     async def resolve(self, stdin_data: str) -> "ToolResult":
-        args = ["-silent", "-json", "-resp", "-t", "10",
-                "-a", "-aaaa", "-cname", "-mx", "-ns", "-txt"]
+        args = [
+            "-silent",
+            "-json",
+            "-resp",
+            "-t",
+            "10",
+            "-a",
+            "-aaaa",
+            "-cname",
+            "-mx",
+            "-ns",
+            "-txt",
+        ]
         return await self.runner.run_pipe(self.binary, args, stdin_data)
 
 
@@ -91,8 +122,9 @@ class Naabu(BaseTool):
     name = "naabu"
     binary = "naabu"
 
-    async def scan(self, host: str,
-                   ports: str = "80,443,8080,8443,3000,9090,3001") -> "ToolResult":
+    async def scan(
+        self, host: str, ports: str = "80,443,8080,8443,3000,9090,3001"
+    ) -> "ToolResult":
         return await self.execute(["-host", host, "-p", ports, "-silent", "-json"])
 
 
@@ -100,11 +132,22 @@ class GoSpider(BaseTool):
     name = "gospider"
     binary = "gospider"
 
-    async def crawl(self, url: str, concurrency: int = 3, depth: int = 3) -> "ToolResult":
-        return await self.execute([
-            "-s", url, "-c", str(concurrency), "-d", str(depth),
-            "--json", "-t", "2",
-        ])
+    async def crawl(
+        self, url: str, concurrency: int = 3, depth: int = 3
+    ) -> "ToolResult":
+        return await self.execute(
+            [
+                "-s",
+                url,
+                "-c",
+                str(concurrency),
+                "-d",
+                str(depth),
+                "--json",
+                "-t",
+                "2",
+            ]
+        )
 
 
 class CloudEnum(BaseTool):
@@ -148,6 +191,7 @@ class SecurityTrailsAPI:
 
     async def domain_info(self, domain: str) -> dict:
         import aiohttp
+
         async with aiohttp.ClientSession() as s:
             async with s.get(
                 f"{self.BASE}/domain/{domain}",
@@ -158,6 +202,7 @@ class SecurityTrailsAPI:
 
     async def subdomains(self, domain: str) -> list[str]:
         import aiohttp
+
         subs: list[str] = []
         async with aiohttp.ClientSession() as s:
             async with s.get(
@@ -172,6 +217,7 @@ class SecurityTrailsAPI:
 
     async def company_domains(self, company: str) -> list[str]:
         import aiohttp
+
         domains: list[str] = []
         async with aiohttp.ClientSession() as s:
             async with s.post(
@@ -189,6 +235,7 @@ class SecurityTrailsAPI:
 
     async def asn_info(self, asn: str) -> dict:
         import aiohttp
+
         async with aiohttp.ClientSession() as s:
             async with s.get(
                 f"{self.BASE}/asn/{asn}",
@@ -207,16 +254,19 @@ class WhoisLookup:
     @property
     def is_available(self) -> bool:
         import shutil
+
         return bool(self.api_key) or bool(shutil.which("whois"))
 
     async def lookup(self, domain: str) -> dict:
         import asyncio
+
         if self.api_key:
             return await self._api_lookup(domain)
         return await self._cli_lookup(domain)
 
     async def _api_lookup(self, domain: str) -> dict:
         import aiohttp
+
         url = f"https://www.whoisxmlapi.com/whoisserver/WhoisService"
         params = {
             "apiKey": self.api_key,
@@ -224,12 +274,15 @@ class WhoisLookup:
             "outputFormat": "json",
         }
         async with aiohttp.ClientSession() as s:
-            async with s.get(url, params=params, timeout=aiohttp.ClientTimeout(total=15)) as r:
+            async with s.get(
+                url, params=params, timeout=aiohttp.ClientTimeout(total=15)
+            ) as r:
                 return await r.json() if r.status == 200 else {}
 
     async def _cli_lookup(self, domain: str) -> dict:
         proc = await asyncio.create_subprocess_exec(
-            "whois", domain,
+            "whois",
+            domain,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -241,19 +294,32 @@ class Katana(BaseTool):
     name = "katana"
     binary = "katana"
 
-    async def crawl(self, url: str, depth: int = 2, concurrency: int = 10) -> "ToolResult":
-        return await self.execute([
-            "-u", url, "-d", str(depth), "-c", str(concurrency),
-            "-silent", "-j", "-kf", "all",
-        ])
+    async def crawl(
+        self, url: str, depth: int = 2, concurrency: int = 10
+    ) -> "ToolResult":
+        return await self.execute(
+            [
+                "-u",
+                url,
+                "-d",
+                str(depth),
+                "-c",
+                str(concurrency),
+                "-silent",
+                "-j",
+                "-kf",
+                "all",
+            ]
+        )
 
 
 class Ffuf(BaseTool):
     name = "ffuf"
     binary = "ffuf"
 
-    async def fuzz(self, url: str, wordlist: str, extensions: str = "",
-                   concurrency: int = 50) -> "ToolResult":
+    async def fuzz(
+        self, url: str, wordlist: str, extensions: str = "", concurrency: int = 50
+    ) -> "ToolResult":
         args = ["-u", url, "-w", wordlist, "-c", "-t", str(concurrency), "-s"]
         if extensions:
             args += ["-e", extensions]
@@ -264,10 +330,20 @@ class CeWL(BaseTool):
     name = "cewl"
     binary = "cewl"
 
-    async def wordlist(self, url: str, depth: int = 2, min_word_length: int = 5) -> "ToolResult":
-        return await self.execute([
-            url, "-d", str(depth), "-m", str(min_word_length), "-c", "--with-numbers",
-        ])
+    async def wordlist(
+        self, url: str, depth: int = 2, min_word_length: int = 5
+    ) -> "ToolResult":
+        return await self.execute(
+            [
+                url,
+                "-d",
+                str(depth),
+                "-m",
+                str(min_word_length),
+                "-c",
+                "--with-numbers",
+            ]
+        )
 
 
 class TrufflehogWrapper(BaseTool):
@@ -295,6 +371,7 @@ class WafW00f(BaseTool):
         result = await self.execute([url, "-a", "-o", "-", "--format=json"])
         for line in result.lines():
             import json
+
             try:
                 data = json.loads(line)
                 if isinstance(data, dict):

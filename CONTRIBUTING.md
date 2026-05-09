@@ -51,42 +51,41 @@ npm run dev
 
 ## Project Structure
 
+RekonStrike follows a decoupled **Repository/Service Architecture**:
+
 ```
 rekonstrike/
 ├── rekonstrike/           # Python package
-│   ├── api/              # FastAPI server (server.py, WebSocket)
-│   ├── phases/           # Phase implementations (0-6)
-│   ├── tools/            # Tool wrappers (subfinder, httpx, etc.)
-│   ├── config.py         # Settings (Pydantic + YAML)
-│   ├── database.py       # SQLAlchemy async models
-│   ├── engine.py         # Phase pipeline engine
-│   ├── runner.py         # Async subprocess runner
-│   ├── scope.py          # Target scope validation
-│   ├── scoring.py        # ROI scoring engine
-│   └── tasks.py          # ARQ task queue
+│   ├── api/              # Delivery Layer (FastAPI)
+│   │   ├── routers/      # Modular API routes (scans.py, targets.py)
+│   │   ├── deps.py       # Dependency injection
+│   │   └── manager.py    # WebSocket connection manager
+│   ├── services/         # Orchestration Layer (ScanService, etc.)
+│   ├── repositories/     # Persistence Layer (Data access objects)
+│   ├── phases/           # Reconnaissance Phases (0-6)
+│   ├── tools/            # Async subprocess wrappers
+│   ├── config.py         # Settings & Config management
+│   ├── database.py       # SQLAlchemy models & Engine setup
+│   ├── engine.py         # Pipeline execution engine
+│   ├── schemas.py        # Pydantic data transport schemas
+│   └── tasks.py          # Task queue management
 ├── ui/                   # React + Vite frontend
-│   └── src/
-│       ├── components/   # React components (<300 lines each)
-│       └── api.js        # API client
-├── docker/               # Docker tool containers
-├── tests/                # Pytest tests
-├── migrations/           # Alembic migrations
-└── README.md
+├── docker/               # Tool isolation containers
+├── tests/                # Automated test suite
+└── migrations/           # Alembic database migrations
 ```
 
 ## Code Style
 
-- **Python**: Follow PEP 8, use type hints, no comments unless necessary
-- **JavaScript/React**: Functional components, hooks, no class components
-- **CSS**: Tailwind CSS v4 utility classes
-- **Components**: Max 300 lines per file
-- **Imports**: Standard library first, then third-party, then local
+- **Python**: Follow PEP 8, use strict type hints, follow the Repository pattern for all DB access.
+- **JavaScript/React**: Functional components, hooks, modern state management.
+- **Components**: Maximum 300 lines per file to ensure maintainability.
+- **Testing**: New features should include unit tests for repositories and services.
 
 ## Testing
 
 - Backend: `python -m pytest tests/ -x -q`
-- All 43+ tests must pass before merging
-- New features should include tests
+- Ensure all tests pass before submitting a Pull Request.
 
 ## License
 

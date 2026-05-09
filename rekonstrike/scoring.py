@@ -5,27 +5,81 @@ class Scorer:
     """Returns (score: int, signals: list[str]) for a host dict and optional program dict."""
 
     TITLE_SIGNALS = {
-        "admin": 35, "login": 30, "dashboard": 30, "api": 20, "portal": 25,
-        "jenkins": 80, "grafana": 75, "kibana": 70, "phpmyadmin": 85,
-        "swagger": 60, "graphql": 65, "console": 50, "debug": 70,
-        "health": 15, "status": 15, "metrics": 40, "prometheus": 55,
-        "s3": 40, "bucket": 35, "aws": 30, "cloud": 20,
-        "backup": 45, "config": 40, "env": 60, "test": 25, "stage": 20,
+        "admin": 35,
+        "login": 30,
+        "dashboard": 30,
+        "api": 20,
+        "portal": 25,
+        "jenkins": 80,
+        "grafana": 75,
+        "kibana": 70,
+        "phpmyadmin": 85,
+        "swagger": 60,
+        "graphql": 65,
+        "console": 50,
+        "debug": 70,
+        "health": 15,
+        "status": 15,
+        "metrics": 40,
+        "prometheus": 55,
+        "s3": 40,
+        "bucket": 35,
+        "aws": 30,
+        "cloud": 20,
+        "backup": 45,
+        "config": 40,
+        "env": 60,
+        "test": 25,
+        "stage": 20,
     }
 
     TECH_WEIGHTS = {
-        "wordpress": 8, "joomla": 10, "drupal": 10, "laravel": 15,
-        "symfony": 12, "rails": 10, "django": 10, "flask": 10, "fastapi": 15,
-        "express": 10, "next.js": 8, "nuxt.js": 8,
-        "spring": 12, "tomcat": 15, "jboss": 20, "weblogic": 25,
-        "iis": 5, "nginx": 2, "apache": 3, "cloudflare": -2,
-        "php": 5, "asp.net": 8, "coldfusion": 20,
-        "swagger": 25, "graphql": 30, "grpc": 20,
-        "elasticsearch": 40, "kibana": 35, "redis": 20,
-        "jenkins": 50, "gitlab": 35, "jira": 25, "confluence": 20,
+        "wordpress": 8,
+        "joomla": 10,
+        "drupal": 10,
+        "laravel": 15,
+        "symfony": 12,
+        "rails": 10,
+        "django": 10,
+        "flask": 10,
+        "fastapi": 15,
+        "express": 10,
+        "next.js": 8,
+        "nuxt.js": 8,
+        "spring": 12,
+        "tomcat": 15,
+        "jboss": 20,
+        "weblogic": 25,
+        "iis": 5,
+        "nginx": 2,
+        "apache": 3,
+        "cloudflare": -2,
+        "php": 5,
+        "asp.net": 8,
+        "coldfusion": 20,
+        "swagger": 25,
+        "graphql": 30,
+        "grpc": 20,
+        "elasticsearch": 40,
+        "kibana": 35,
+        "redis": 20,
+        "jenkins": 50,
+        "gitlab": 35,
+        "jira": 25,
+        "confluence": 20,
     }
 
-    STATUS_WEIGHTS = {200: 10, 301: 5, 302: 5, 401: 20, 403: 25, 404: 5, 500: 30, 502: 20, 503: 15}
+    STATUS_WEIGHTS = {
+        200: 10,
+        301: 5,
+        302: 5,
+        401: 20,
+        403: 25,
+        404: 5,
+        500: 30,
+        502: 20,
+        503: 15,
+    }
 
     @classmethod
     def score(cls, host: dict, program: dict | None = None) -> tuple[int, list[str]]:
@@ -44,6 +98,7 @@ class Scorer:
         techs_raw = host.get("technologies")
         if isinstance(techs_raw, str):
             import json
+
             try:
                 techs_raw = json.loads(techs_raw)
             except json.JSONDecodeError:

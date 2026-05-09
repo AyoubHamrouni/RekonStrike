@@ -3,11 +3,14 @@ from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import ScanSession, ScanArtifact
 
+
 class SessionRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create_session(self, target_id: int, workflow: str, config_snapshot: dict) -> ScanSession:
+    async def create_session(
+        self, target_id: int, workflow: str, config_snapshot: dict
+    ) -> ScanSession:
         scan_sesh = ScanSession(
             target_id=target_id,
             workflow=workflow,
@@ -18,13 +21,15 @@ class SessionRepository:
         await self.session.flush()
         return scan_sesh
 
-    async def update_status(self, session_id: int, status: str, error: Optional[str] = None):
+    async def update_status(
+        self, session_id: int, status: str, error: Optional[str] = None
+    ):
         vals = {"status": status}
         if status == "completed":
             vals["ended_at"] = func.now()
         if error:
             vals["error_message"] = error
-        
+
         await self.session.execute(
             update(ScanSession).where(ScanSession.id == session_id).values(**vals)
         )

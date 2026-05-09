@@ -1,11 +1,13 @@
 """Phase 2: Active reconnaissance — DNS brute-force, cloud enum, port scanning"""
+
 import asyncio
 from . import phase
 from ..output import out
 
 
-@phase(2, "Active Reconnaissance",
-       "DNS brute-force, port scanning, cloud asset discovery")
+@phase(
+    2, "Active Reconnaissance", "DNS brute-force, port scanning, cloud asset discovery"
+)
 class Phase:
     def __init__(self, ctx):
         self.ctx = ctx
@@ -26,7 +28,12 @@ class Phase:
         return t
 
     async def _company_workflow(self, company: str):
-        from ..tools.wrappers import Metabigor, AmassIntelligence, SecurityTrailsAPI, WhoisLookup
+        from ..tools.wrappers import (
+            Metabigor,
+            AmassIntelligence,
+            SecurityTrailsAPI,
+            WhoisLookup,
+        )
 
         discovered: set[str] = set()
         st_api_key = self.ctx.settings.api_key("securitytrails")
@@ -151,15 +158,15 @@ class Phase:
             # Update resolved flag in database
             if resolved:
                 from ..database import Subdomain
-                from sqlalchemy import update
-                async with await self.ctx.db.get_session() as s:
-                    async with s.begin():
-                        await s.execute(
-                            update(Subdomain)
-                            .where(Subdomain.target_id == self.ctx.target_id)
-                            .where(Subdomain.subdomain.in_(resolved))
-                            .values(resolved=True)
-                        )
+            from sqlalchemy import update
+
+            async with self.ctx.db_session.begin():
+                await self.ctx.db_session.execute(
+                    update(Subdomain)
+                    .where(Subdomain.target_id == self.ctx.target_id)
+                    .where(Subdomain.subdomain.in_(resolved))
+                    .values(resolved=True)
+                )
 
             return resolved
         except Exception as e:
@@ -173,20 +180,32 @@ class Phase:
             records = r.json_lines()
             from ..database import DNSRecord
             from sqlalchemy import insert
+
             rows = []
             for rec in records:
                 host = rec.get("host", "")
-                rtype = rec.get("type", "A")
-                rval = str(rec.get("a") or rec.get("aaaa") or rec.get("cname") or rec.get("mx") or rec.get("ns") or rec.get("txt") or ["unknown"])[1:-1]
-                rows.append({
+            rtype = rec.get("type", "A")
+            rval = str(
+                rec.get("a")
+                or rec.get("aaaa")
+                or rec.get("cname")
+                or rec.get("mx")
+                or rec.get("ns")
+                or rec.get("txt")
+                or ["unknown"]
+            )[1:-1]
+            rows.append(
+                {
                     "target_id": self.ctx.target_id,
-                    "domain": host, "record_type": rtype,
-                    "record_value": rval[:500], "source": "dnsx",
-                })
+                    "domain": host,
+                    "record_type": rtype,
+                    "record_value": rval[:500],
+                    "source": "dnsx",
+                }
+            )
             if rows:
-                async with await self.ctx.db.get_session() as s:
-                    async with s.begin():
-                        await s.execute(insert(DNSRecord).values(rows))
+                async with self.ctx.db_session.begin():
+                    await self.ctx.db_session.execute(insert(DNSRecord).values(rows))
             out.success(f"DNSx: {len(records)} records")
             return {r.get("host", "") for r in records if r.get("host")}
         except Exception as e:

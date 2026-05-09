@@ -1,11 +1,15 @@
 """Phase 1: Passive reconnaissance — OSINT subdomain enumeration"""
+
 from . import phase
 from ..output import out
 from ..repositories.target_repo import TargetRepository
 
 
-@phase(1, "Passive Reconnaissance",
-       "Subdomain enumeration via passive OSINT sources (crt.sh, subfinder, gau, github)")
+@phase(
+    1,
+    "Passive Reconnaissance",
+    "Subdomain enumeration via passive OSINT sources (crt.sh, subfinder, gau, github)",
+)
 class Phase:
     def __init__(self, ctx):
         self.ctx = ctx
@@ -22,6 +26,7 @@ class Phase:
 
         # ── Subfinder ──────────────────────────────────────────────────────
         from ..tools.wrappers import Subfinder
+
         sf = Subfinder(self.ctx.runner)
         if sf.is_available:
             try:
@@ -33,6 +38,7 @@ class Phase:
 
         # ── GAU ────────────────────────────────────────────────────────────
         from ..tools.wrappers import Gau
+
         gau = Gau(self.ctx.runner)
         if gau.is_available:
             try:
@@ -46,6 +52,7 @@ class Phase:
         token = self.ctx.settings.api_key("github")
         if token:
             from ..tools.wrappers import GitHubRecon
+
             gh = GitHubRecon(self.ctx.runner)
             if gh.is_available:
                 try:
@@ -58,6 +65,7 @@ class Phase:
 
         # ── Filter & Store ────────────────────────────────────────────────
         from ..database import normalize_host
+
         valid = set()
         for s in all_subs:
             h = normalize_host(s.lower().strip()) if s else ""
@@ -78,10 +86,11 @@ class Phase:
             valid_sorted = valid_sorted[:max_subs]
 
         # Use Repository for storage
-        async with await self.ctx.db.get_session() as s:
-            async with s.begin():
-                repo = TargetRepository(s)
-                await repo.add_subdomains(self.ctx.target_id, valid_sorted, source="passive")
+        async with self.ctx.db_session.begin_nested():
+            repo = TargetRepository(self.ctx.db_session)
+            await repo.add_subdomains(
+                self.ctx.target_id, valid_sorted, source="passive"
+            )
 
         out.result("Passive Subdomains", sorted(valid))
         self.ctx.subdomains = valid
@@ -97,6 +106,7 @@ class Phase:
 
     async def _crt_sh(self, domain: str) -> set[str]:
         import aiohttp
+
         subs: set[str] = set()
         try:
             headers = {"User-Agent": "RekonStrike/0.1.0 (reconnaissance framework)"}
@@ -119,13 +129,17 @@ class Phase:
 
     async def _run_gau(self, tool, domain: str) -> set[str]:
         from urllib.parse import urlparse
+
         subs: set[str] = set()
-        result = await tool.fetch(domain)
-        for line in result.lines():
-            try:
-                host = urlparse(line).hostname or ""
-                if host.endswith(f".{domain}") or host == domain:
-                    subs.add(host)
-            except Exception:
-                pass
+        try:
+            result = await tool.fetch(domain)
+            for line in result.lines():
+                try:
+                    host = urlparse(line).hostname or ""
+                    if host.endswith(f".{domain}") or host == domain:
+                        subs.add(host)
+                except Exception:
+                    pass
+        except Exception:
+            pass
         return subs

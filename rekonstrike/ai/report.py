@@ -55,7 +55,9 @@ async def draft_bug_report(
     model: str | None = None,
 ) -> str:
     user = _build_user_prompt(vuln, host, platform)
-    raw = await call_ai(SYSTEM_PROMPT, user, max_tokens=1500, provider=provider, model=model)
+    raw = await call_ai(
+        SYSTEM_PROMPT, user, max_tokens=1500, provider=provider, model=model
+    )
     if not raw:
         logger.info("AI report returned empty — using placeholder")
         return _placeholder_report(vuln, host)

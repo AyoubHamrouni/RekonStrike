@@ -13,19 +13,29 @@ logger = logging.getLogger(__name__)
 
 PROVIDER_MODELS = {
     "openai": [
-        "gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-mini", "o1-preview",
+        "gpt-4o",
+        "gpt-4o-mini",
+        "gpt-4-turbo",
+        "o1-mini",
+        "o1-preview",
     ],
     "anthropic": [
-        "claude-3-opus-20240229", "claude-3-sonnet-20240229",
-        "claude-3-haiku-20240307", "claude-3-5-sonnet-20241022",
+        "claude-3-opus-20240229",
+        "claude-3-sonnet-20240229",
+        "claude-3-haiku-20240307",
+        "claude-3-5-sonnet-20241022",
         "claude-3-5-haiku-20241022",
     ],
     "google": [
-        "gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash",
+        "gemini-1.5-pro",
+        "gemini-1.5-flash",
+        "gemini-2.0-flash",
     ],
     "openrouter": [
-        "openai/gpt-4o", "openai/gpt-4o-mini",
-        "anthropic/claude-3.5-sonnet", "google/gemini-1.5-pro",
+        "openai/gpt-4o",
+        "openai/gpt-4o-mini",
+        "anthropic/claude-3.5-sonnet",
+        "google/gemini-1.5-pro",
     ],
 }
 
@@ -40,6 +50,7 @@ DEFAULT_MODELS: dict[str, str] = {
 def _resolve_settings():
     """Lazy-import Settings to avoid circular imports at module level."""
     from rekonstrike.config import load_settings
+
     return load_settings()
 
 
@@ -81,7 +92,8 @@ async def _call_openrouter(system: str, user: str, model: str, max_tokens: int) 
     settings = _resolve_settings()
     api_key = _get_api_key(settings, "openrouter")
     base_url = settings.ai_base_urls.get(
-        "openrouter", "https://openrouter.ai/api/v1",
+        "openrouter",
+        "https://openrouter.ai/api/v1",
     )
     if not api_key:
         logger.warning("OpenRouter API key not configured")
@@ -153,7 +165,8 @@ async def _call_google(system: str, user: str, model: str, max_tokens: int) -> s
             if resp.status != 200:
                 logger.warning(
                     "Google API returned %s: %s",
-                    resp.status, await resp.text(),
+                    resp.status,
+                    await resp.text(),
                 )
                 return ""
             data = await resp.json()
@@ -183,7 +196,11 @@ async def call_ai(
     """
     settings = _resolve_settings()
     provider = provider or settings.ai_provider or "openai"
-    model = model or settings.default_ai_model or DEFAULT_MODELS.get(provider, "gpt-4o-mini")
+    model = (
+        model
+        or settings.default_ai_model
+        or DEFAULT_MODELS.get(provider, "gpt-4o-mini")
+    )
 
     try:
         if provider == "openai":

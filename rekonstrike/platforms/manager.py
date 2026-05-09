@@ -13,17 +13,21 @@ class PlatformManager:
             return None
         if platform == "hackerone":
             from .hackerone import HackerOneClient
+
             return HackerOneClient(api_key)
         if platform == "bugcrowd":
             from .bugcrowd import BugcrowdClient
+
             return BugcrowdClient(api_key)
         if platform == "intigriti":
             from .intigriti import IntigritiClient
+
             return IntigritiClient(api_key)
         return None
 
-    async def sync_program_scope(self, target_id: int, platform: str,
-                                  program_handle: str, db) -> dict | None:
+    async def sync_program_scope(
+        self, target_id: int, platform: str, program_handle: str, db
+    ) -> dict | None:
         from ..database import ProgramScope
         from sqlalchemy import select
 

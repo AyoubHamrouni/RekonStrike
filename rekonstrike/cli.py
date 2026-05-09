@@ -1,4 +1,5 @@
 """RekonStrike CLI — built with Typer for fast, intuitive command-line operation"""
+
 import asyncio
 import sys
 from pathlib import Path
@@ -29,12 +30,15 @@ def _main():
 @app.command()
 def scan(
     target: str = typer.Argument(..., help="Target domain, company name, or URL"),
-    target_type: str = typer.Option("wildcard", "-t", "--type",
-                                    help="Target type: wildcard, domain, company, url"),
-    phases: str = typer.Option(None, "-p", "--phases",
-                               help="Phases to run (comma-separated, e.g. 0,1,2)"),
-    config: Optional[Path] = typer.Option(None, "-c", "--config",
-                                          help="Path to config YAML file"),
+    target_type: str = typer.Option(
+        "wildcard", "-t", "--type", help="Target type: wildcard, domain, company, url"
+    ),
+    phases: str = typer.Option(
+        None, "-p", "--phases", help="Phases to run (comma-separated, e.g. 0,1,2)"
+    ),
+    config: Optional[Path] = typer.Option(
+        None, "-c", "--config", help="Path to config YAML file"
+    ),
     verbose: bool = typer.Option(False, "-v", "--verbose", help="Verbose output"),
 ):
     """Run reconnaissance scan against a target.
@@ -65,6 +69,7 @@ def scan(
         out.error(f"Scan failed: {e}")
         if verbose:
             import traceback
+
             traceback.print_exc()
         sys.exit(1)
 
@@ -72,13 +77,17 @@ def scan(
 @app.command()
 def config(
     show: bool = typer.Option(False, "--show", help="Show current configuration"),
-    set_key: Optional[str] = typer.Option(None, "--set", help="Set config key (e.g. api_keys.shodan)"),
+    set_key: Optional[str] = typer.Option(
+        None, "--set", help="Set config key (e.g. api_keys.shodan)"
+    ),
     set_value: Optional[str] = typer.Option(None, "--value", help="Value for --set"),
-    config_path: Optional[Path] = typer.Option(None, "-c", "--config",
-                                               help="Path to config file"),
+    config_path: Optional[Path] = typer.Option(
+        None, "-c", "--config", help="Path to config file"
+    ),
 ):
     """View or modify configuration."""
     import yaml
+
     settings = load_settings(str(config_path) if config_path else None)
 
     if show:
@@ -107,8 +116,9 @@ def config(
 
 @app.command()
 def worker(
-    config_path: Optional[Path] = typer.Option(None, "-c", "--config",
-                                                help="Path to config YAML file"),
+    config_path: Optional[Path] = typer.Option(
+        None, "-c", "--config", help="Path to config YAML file"
+    ),
 ):
     """Start the ARQ background worker for processing scan jobs."""
     settings = load_settings(str(config_path) if config_path else None)
@@ -164,6 +174,7 @@ def install():
     }
 
     import shutil
+
     for name, url in tools.items():
         found = shutil.which(name)
         if found:

@@ -27,12 +27,14 @@ class HackerOneClient(PlatformClient):
                     break
                 for item in data.get("data", []):
                     attrs = item.get("attributes", {})
-                    programs.append({
-                        "handle": item.get("id", ""),
-                        "name": attrs.get("name", ""),
-                        "offers_bounties": attrs.get("offers_bounties", False),
-                        "state": attrs.get("state", ""),
-                    })
+                    programs.append(
+                        {
+                            "handle": item.get("id", ""),
+                            "name": attrs.get("name", ""),
+                            "offers_bounties": attrs.get("offers_bounties", False),
+                            "state": attrs.get("state", ""),
+                        }
+                    )
                 url = None
                 links = data.get("links", {})
                 next_url = links.get("next") if isinstance(links, dict) else None

@@ -1,13 +1,17 @@
 """Scope validation — wildcard, domain, CIDR matching with out-of-scope override"""
+
 import re
 import ipaddress
 from typing import Optional
 
 
 class Scope:
-    def __init__(self, in_scope: list[str] | None = None,
-                 out_of_scope: list[str] | None = None,
-                 target_type: str = ""):
+    def __init__(
+        self,
+        in_scope: list[str] | None = None,
+        out_of_scope: list[str] | None = None,
+        target_type: str = "",
+    ):
         self.in_scope = [s.lower().strip() for s in (in_scope or [])]
         self.out_of_scope = [s.lower().strip() for s in (out_of_scope or [])]
         self.target_type = target_type
@@ -39,6 +43,7 @@ class Scope:
     @classmethod
     def from_file(cls, path: str) -> "Scope":
         import yaml
+
         try:
             with open(path) as f:
                 data = yaml.safe_load(f) or {}

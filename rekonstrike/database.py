@@ -1,15 +1,29 @@
 """Async database layer — SQLAlchemy 2.1+ with PostgreSQL (primary) and SQLite (fallback)"""
+
 from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import (
-    AsyncSession, create_async_engine, async_sessionmaker, AsyncEngine,
+    AsyncSession,
+    create_async_engine,
+    async_sessionmaker,
+    AsyncEngine,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import (
-    String, Integer, Boolean, Text, Float, JSON, DateTime,
-    ForeignKey, UniqueConstraint, Index, select, func,
+    String,
+    Integer,
+    Boolean,
+    Text,
+    Float,
+    JSON,
+    DateTime,
+    ForeignKey,
+    UniqueConstraint,
+    Index,
+    select,
+    func,
 )
 
 from .config import Settings
@@ -17,9 +31,11 @@ from .config import Settings
 
 # ─── URL Normalization ─────────────────────────────────────────────────────────
 
+
 def normalize_host(raw: str) -> str:
     """Strip scheme, port, trailing slash, and wildcard prefix from a URL or hostname."""
     from urllib.parse import urlparse
+
     raw = raw.strip().lower()
     if raw.startswith("*."):
         raw = raw[2:]
@@ -42,33 +58,51 @@ class Base(DeclarativeBase):
 
 # ─── Models ───────────────────────────────────────────────────────────────────
 
+
 class ScopeTarget(Base):
     __tablename__ = "scope_targets"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     target: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     target_type: Mapped[str] = mapped_column(
-        String(20), nullable=False,
+        String(20),
+        nullable=False,
     )  # wildcard | domain | url | cidr | company
     program: Mapped[Optional[str]] = mapped_column(String(255))
     in_scope: Mapped[bool] = mapped_column(Boolean, default=True)
     notes: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
-    subdomains = relationship("Subdomain", back_populates="target", cascade="all, delete-orphan")
-    dns_records = relationship("DNSRecord", back_populates="target", cascade="all, delete-orphan")
-    sessions = relationship("ScanSession", back_populates="target", cascade="all, delete-orphan")
-    program_scopes = relationship("ProgramScope", back_populates="target", cascade="all, delete-orphan")
-    secret_findings = relationship("SecretFinding", back_populates="target", cascade="all, delete-orphan")
-    ai_insights = relationship("AIInsight", back_populates="target", cascade="all, delete-orphan")
+    subdomains = relationship(
+        "Subdomain", back_populates="target", cascade="all, delete-orphan"
+    )
+    dns_records = relationship(
+        "DNSRecord", back_populates="target", cascade="all, delete-orphan"
+    )
+    sessions = relationship(
+        "ScanSession", back_populates="target", cascade="all, delete-orphan"
+    )
+    program_scopes = relationship(
+        "ProgramScope", back_populates="target", cascade="all, delete-orphan"
+    )
+    secret_findings = relationship(
+        "SecretFinding", back_populates="target", cascade="all, delete-orphan"
+    )
+    ai_insights = relationship(
+        "AIInsight", back_populates="target", cascade="all, delete-orphan"
+    )
 
 
 class ProgramScope(Base):
     __tablename__ = "program_scopes"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    target_id: Mapped[int] = mapped_column(ForeignKey("scope_targets.id", ondelete="CASCADE"))
-    platform: Mapped[str] = mapped_column(String(20))  # hackerone|bugcrowd|intigriti|manual
+    target_id: Mapped[int] = mapped_column(
+        ForeignKey("scope_targets.id", ondelete="CASCADE")
+    )
+    platform: Mapped[str] = mapped_column(
+        String(20)
+    )  # hackerone|bugcrowd|intigriti|manual
     program_handle: Mapped[str] = mapped_column(String(255))
     in_scope: Mapped[list[str]] = mapped_column(JSON, default=list)
     out_of_scope: Mapped[list[str]] = mapped_column(JSON, default=list)
@@ -90,7 +124,9 @@ class Subdomain(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    target_id: Mapped[int] = mapped_column(ForeignKey("scope_targets.id", ondelete="CASCADE"))
+    target_id: Mapped[int] = mapped_column(
+        ForeignKey("scope_targets.id", ondelete="CASCADE")
+    )
     subdomain: Mapped[str] = mapped_column(String(255), nullable=False)
     source: Mapped[str] = mapped_column(String(100), nullable=False)
     resolved: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -98,7 +134,9 @@ class Subdomain(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     target = relationship("ScopeTarget", back_populates="subdomains")
-    live_hosts = relationship("LiveHost", back_populates="subdomain", cascade="all, delete-orphan")
+    live_hosts = relationship(
+        "LiveHost", back_populates="subdomain", cascade="all, delete-orphan"
+    )
 
 
 class DNSRecord(Base):
@@ -109,7 +147,9 @@ class DNSRecord(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    target_id: Mapped[int] = mapped_column(ForeignKey("scope_targets.id", ondelete="CASCADE"))
+    target_id: Mapped[int] = mapped_column(
+        ForeignKey("scope_targets.id", ondelete="CASCADE")
+    )
     domain: Mapped[str] = mapped_column(String(255), nullable=False)
     record_type: Mapped[str] = mapped_column(String(10), nullable=False)
     record_value: Mapped[str] = mapped_column(Text, nullable=False)
@@ -128,7 +168,9 @@ class SecretFinding(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    target_id: Mapped[int] = mapped_column(ForeignKey("scope_targets.id", ondelete="CASCADE"))
+    target_id: Mapped[int] = mapped_column(
+        ForeignKey("scope_targets.id", ondelete="CASCADE")
+    )
     source_url: Mapped[Optional[str]] = mapped_column(String(2048))
     detector_name: Mapped[str] = mapped_column(String(100))
     raw_secret: Mapped[Optional[str]] = mapped_column(Text)
@@ -148,7 +190,9 @@ class LiveHost(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    subdomain_id: Mapped[Optional[int]] = mapped_column(ForeignKey("subdomains.id", ondelete="SET NULL"))
+    subdomain_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("subdomains.id", ondelete="SET NULL")
+    )
     url: Mapped[str] = mapped_column(String(1024), nullable=False)
     raw_url: Mapped[Optional[str]] = mapped_column(String(1024))
     status_code: Mapped[Optional[int]] = mapped_column(Integer)
@@ -163,18 +207,22 @@ class LiveHost(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     subdomain = relationship("Subdomain", back_populates="live_hosts")
-    endpoints = relationship("Endpoint", back_populates="live_host", cascade="all, delete-orphan")
-    vulnerabilities = relationship("Vulnerability", back_populates="live_host", cascade="all, delete-orphan")
+    endpoints = relationship(
+        "Endpoint", back_populates="live_host", cascade="all, delete-orphan"
+    )
+    vulnerabilities = relationship(
+        "Vulnerability", back_populates="live_host", cascade="all, delete-orphan"
+    )
 
 
 class Endpoint(Base):
     __tablename__ = "endpoints"
-    __table_args__ = (
-        Index("ix_endpoint_live_host", "live_host_id"),
-    )
+    __table_args__ = (Index("ix_endpoint_live_host", "live_host_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    live_host_id: Mapped[int] = mapped_column(ForeignKey("live_hosts.id", ondelete="CASCADE"))
+    live_host_id: Mapped[int] = mapped_column(
+        ForeignKey("live_hosts.id", ondelete="CASCADE")
+    )
     url: Mapped[str] = mapped_column(String(2048), nullable=False)
     method: Mapped[str] = mapped_column(String(10), default="GET")
     status_code: Mapped[Optional[int]] = mapped_column(Integer)
@@ -193,7 +241,9 @@ class Vulnerability(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    live_host_id: Mapped[Optional[int]] = mapped_column(ForeignKey("live_hosts.id", ondelete="SET NULL"))
+    live_host_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("live_hosts.id", ondelete="SET NULL")
+    )
     template_id: Mapped[Optional[str]] = mapped_column(String(255))
     name: Mapped[str] = mapped_column(String(500))
     severity: Mapped[str] = mapped_column(String(20), default="unknown")
@@ -214,7 +264,9 @@ class TakeoverFinding(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    subdomain_id: Mapped[int] = mapped_column(ForeignKey("subdomains.id", ondelete="CASCADE"))
+    subdomain_id: Mapped[int] = mapped_column(
+        ForeignKey("subdomains.id", ondelete="CASCADE")
+    )
     service: Mapped[str] = mapped_column(String(100))
     cname_value: Mapped[str] = mapped_column(String(500))
     fingerprint_matched: Mapped[str] = mapped_column(Text)
@@ -226,13 +278,17 @@ class TakeoverFinding(Base):
 class AIInsight(Base):
     __tablename__ = "ai_insights"
     __table_args__ = (
-        UniqueConstraint("target_id", "insight_type", "input_hash", name="uq_ai_insight"),
+        UniqueConstraint(
+            "target_id", "insight_type", "input_hash", name="uq_ai_insight"
+        ),
         Index("ix_ai_insight_target", "target_id"),
         Index("ix_ai_insight_type", "insight_type"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    target_id: Mapped[int] = mapped_column(ForeignKey("scope_targets.id", ondelete="CASCADE"))
+    target_id: Mapped[int] = mapped_column(
+        ForeignKey("scope_targets.id", ondelete="CASCADE")
+    )
     insight_type: Mapped[str] = mapped_column(String(50))  # triage | surface | advisor
     input_hash: Mapped[str] = mapped_column(String(64))  # sha256 to deduplicate
     result: Mapped[dict] = mapped_column(JSON)
@@ -250,9 +306,15 @@ class ScanSession(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    target_id: Mapped[int] = mapped_column(ForeignKey("scope_targets.id", ondelete="CASCADE"))
-    workflow: Mapped[str] = mapped_column(String(20))  # wildcard | domain | company | url
-    status: Mapped[str] = mapped_column(String(20), default="running")  # running | paused | completed | failed | cancelled
+    target_id: Mapped[int] = mapped_column(
+        ForeignKey("scope_targets.id", ondelete="CASCADE")
+    )
+    workflow: Mapped[str] = mapped_column(
+        String(20)
+    )  # wildcard | domain | company | url
+    status: Mapped[str] = mapped_column(
+        String(20), default="running"
+    )  # running | paused | completed | failed | cancelled
     current_phase: Mapped[Optional[str]] = mapped_column(String(100))
     started_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
@@ -261,17 +323,19 @@ class ScanSession(Base):
     config_snapshot: Mapped[Optional[dict]] = mapped_column(JSON)
 
     target = relationship("ScopeTarget", back_populates="sessions")
-    artifacts = relationship("ScanArtifact", back_populates="session", cascade="all, delete-orphan")
+    artifacts = relationship(
+        "ScanArtifact", back_populates="session", cascade="all, delete-orphan"
+    )
 
 
 class ScanArtifact(Base):
     __tablename__ = "scan_artifacts"
-    __table_args__ = (
-        Index("ix_artifact_session", "session_id"),
-    )
+    __table_args__ = (Index("ix_artifact_session", "session_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    session_id: Mapped[int] = mapped_column(ForeignKey("scan_sessions.id", ondelete="CASCADE"))
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("scan_sessions.id", ondelete="CASCADE")
+    )
     phase: Mapped[str] = mapped_column(String(100))
     tool: Mapped[str] = mapped_column(String(100))
     command: Mapped[Optional[str]] = mapped_column(Text)
@@ -286,6 +350,7 @@ class ScanArtifact(Base):
 
 # ─── Engine & Session ─────────────────────────────────────────────────────────
 
+
 class Database:
     def __init__(self, settings: Settings):
         self.settings = settings
@@ -297,10 +362,14 @@ class Database:
         self.engine: AsyncEngine = create_async_engine(
             url,
             pool_size=settings.db_pool_size if settings.db_type == "postgresql" else 1,
-            max_overflow=settings.db_max_overflow if settings.db_type == "postgresql" else 0,
+            max_overflow=settings.db_max_overflow
+            if settings.db_type == "postgresql"
+            else 0,
             echo=False,
         )
-        self.async_session = async_sessionmaker(self.engine, class_=AsyncSession, expire_on_commit=False)
+        self.async_session = async_sessionmaker(
+            self.engine, class_=AsyncSession, expire_on_commit=False
+        )
 
     async def create_all(self):
         async with self.engine.begin() as conn:
@@ -316,7 +385,9 @@ class Database:
     async def close(self):
         await self.engine.dispose()
 
-    async def count(self, model, session: Optional[AsyncSession] = None, **filters) -> int:
+    async def count(
+        self, model, session: Optional[AsyncSession] = None, **filters
+    ) -> int:
         if session:
             stmt = select(func.count()).select_from(model)
             for k, v in filters.items():

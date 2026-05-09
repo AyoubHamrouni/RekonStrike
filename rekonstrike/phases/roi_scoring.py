@@ -1,4 +1,5 @@
 """Phase 6: Reporting — ROI scoring, attack surface map, JSON report"""
+
 import json
 from datetime import datetime
 from pathlib import Path
@@ -11,8 +12,11 @@ from ..scoring import Scorer
 from ..database import LiveHost, Vulnerability, Subdomain
 
 
-@phase(6, "Reporting & ROI Analysis",
-       "ROI scoring, attack surface mapping, report generation")
+@phase(
+    6,
+    "Reporting & ROI Analysis",
+    "ROI scoring, attack surface mapping, report generation",
+)
 class Phase:
     def __init__(self, ctx):
         self.ctx = ctx
@@ -21,26 +25,26 @@ class Phase:
         out.info("Calculating ROI scores and generating report")
 
         from ..database import TakeoverFinding, SecretFinding
-        async with await self.ctx.db.get_session() as s:
-            async with s.begin():
-                rows = await s.execute(
-                    LiveHost.__table__.select()
-                )
-                hosts = [dict(r._mapping) for r in rows.fetchall()]
 
-                # Pre-query takeover findings per subdomain
-                take_rows = await s.execute(
-                    select(TakeoverFinding.subdomain_id, func.count().label("cnt"))
-                    .group_by(TakeoverFinding.subdomain_id)
-                )
-                takeover_counts = {r.subdomain_id: r.cnt for r in take_rows.fetchall()}
+        async with self.ctx.db_session.begin():
+            rows = await self.ctx.db_session.execute(LiveHost.__table__.select())
+            hosts = [dict(r._mapping) for r in rows.fetchall()]
 
-                # Pre-query secret findings for this target
-                secret_count = await s.execute(
-                    select(func.count()).select_from(SecretFinding)
-                    .where(SecretFinding.target_id == self.ctx.target_id)
-                )
-                total_secrets = secret_count.scalar() or 0
+            # Pre-query takeover findings per subdomain
+            take_rows = await self.ctx.db_session.execute(
+                select(
+                    TakeoverFinding.subdomain_id, func.count().label("cnt")
+                ).group_by(TakeoverFinding.subdomain_id)
+            )
+            takeover_counts = {r.subdomain_id: r.cnt for r in take_rows.fetchall()}
+
+            # Pre-query secret findings for this target
+            secret_count = await self.ctx.db_session.execute(
+                select(func.count())
+                .select_from(SecretFinding)
+                .where(SecretFinding.target_id == self.ctx.target_id)
+            )
+            total_secrets = secret_count.scalar() or 0
 
         # Get program data from settings or target's ProgramScope
         program = await self._get_program_data()
@@ -65,11 +69,13 @@ class Phase:
             out.stat("Highest ROI", f"{scored[0][0]} — {scored[0][1]}")
 
         # ── Generate Report ──────────────────────────────────────────────
-        async with await self.ctx.db.get_session() as s:
-            async with s.begin():
-                sub_count = await self.ctx.db.count(Subdomain, target_id=self.ctx.target_id)
-                live_count = await self.ctx.db.count(LiveHost, target_id=self.ctx.target_id)
-                vuln_count = await self.ctx.db.count(Vulnerability)
+        sub_count = await self.ctx.db.count(
+            Subdomain, session=self.ctx.db_session, target_id=self.ctx.target_id
+        )
+        live_count = await self.ctx.db.count(
+            LiveHost, session=self.ctx.db_session, target_id=self.ctx.target_id
+        )
+        vuln_count = await self.ctx.db.count(Vulnerability, session=self.ctx.db_session)
 
         report = {
             "framework": "RekonStrike",
@@ -83,8 +89,7 @@ class Phase:
                 "vulnerabilities": vuln_count,
             },
             "top_assets": [
-                {"url": u, "roi_score": s, "signals": sig}
-                for s, u, sig in scored[:25]
+                {"url": u, "roi_score": s, "signals": sig} for s, u, sig in scored[:25]
             ],
             "config_snapshot": self.ctx.settings.model_dump(mode="json"),
         }
@@ -100,17 +105,17 @@ class Phase:
 
     async def _get_program_data(self) -> dict | None:
         from ..database import ProgramScope
-        async with await self.ctx.db.get_session() as s:
-            async with s.begin():
-                row = await s.execute(
-                    select(ProgramScope).where(ProgramScope.target_id == self.ctx.target_id)
-                )
-                p = row.scalar_one_or_none()
-                if p:
-                    return {
-                        "platform": p.platform,
-                        "program_handle": p.program_handle,
-                        "bounty_min": p.bounty_min,
-                        "bounty_max": p.bounty_max,
-                    }
+
+        async with self.ctx.db_session.begin():
+            row = await self.ctx.db_session.execute(
+                select(ProgramScope).where(ProgramScope.target_id == self.ctx.target_id)
+            )
+            p = row.scalar_one_or_none()
+            if p:
+                return {
+                    "platform": p.platform,
+                    "program_handle": p.program_handle,
+                    "bounty_min": p.bounty_min,
+                    "bounty_max": p.bounty_max,
+                }
         return None

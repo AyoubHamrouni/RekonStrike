@@ -1,4 +1,5 @@
 """Configuration management — YAML with env var override, Pydantic validated"""
+
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -37,15 +38,25 @@ class Settings(BaseSettings):
     auto_metadata: bool = True
 
     # API Keys (overridable via RS_API_KEYS__SHODAN=xxx)
-    api_keys: dict[str, str] = Field(default_factory=lambda: {
-        "github": "", "shodan": "", "securitytrails": "",
-        "censys": "", "hackerone": "", "whoisxmlapi": "",
-    })
+    api_keys: dict[str, str] = Field(
+        default_factory=lambda: {
+            "github": "",
+            "shodan": "",
+            "securitytrails": "",
+            "censys": "",
+            "hackerone": "",
+            "whoisxmlapi": "",
+        }
+    )
 
     # Platform API Keys (overridable via RS_PLATFORM_API_KEYS__HACKERONE=xxx)
-    platform_api_keys: dict[str, str] = Field(default_factory=lambda: {
-        "hackerone": "", "bugcrowd": "", "intigriti": "",
-    })
+    platform_api_keys: dict[str, str] = Field(
+        default_factory=lambda: {
+            "hackerone": "",
+            "bugcrowd": "",
+            "intigriti": "",
+        }
+    )
 
     # Server API key for web API authentication (empty = no auth)
     server_api_key: str = ""
@@ -60,17 +71,24 @@ class Settings(BaseSettings):
     default_ai_model: str = "gpt-4o-mini"
 
     # AI provider API keys (overridable via RS_AI_API_KEYS__OPENAI=xxx)
-    ai_api_keys: dict[str, str] = Field(default_factory=lambda: {
-        "openai": "", "anthropic": "", "google": "", "openrouter": "",
-    })
+    ai_api_keys: dict[str, str] = Field(
+        default_factory=lambda: {
+            "openai": "",
+            "anthropic": "",
+            "google": "",
+            "openrouter": "",
+        }
+    )
 
     # AI provider base URLs for custom endpoints
-    ai_base_urls: dict[str, str] = Field(default_factory=lambda: {
-        "openai": "https://api.openai.com/v1",
-        "anthropic": "https://api.anthropic.com",
-        "google": "",
-        "openrouter": "https://openrouter.ai/api/v1",
-    })
+    ai_base_urls: dict[str, str] = Field(
+        default_factory=lambda: {
+            "openai": "https://api.openai.com/v1",
+            "anthropic": "https://api.anthropic.com",
+            "google": "",
+            "openrouter": "https://openrouter.ai/api/v1",
+        }
+    )
 
     # Paths
     go_bin: str = "~/go/bin"

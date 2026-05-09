@@ -1,4 +1,5 @@
 """Terminal output with Rich — progress bars, tables, panels, live display"""
+
 from rich.console import Console as RichConsole
 from rich.table import Table
 from rich.panel import Panel
@@ -13,12 +14,14 @@ _console = RichConsole()
 class Output:
     @staticmethod
     def banner():
-        _console.print(Panel.fit(
-            "[bold magenta]RekonStrike[/bold magenta] — [cyan]Reconnaissance & Asset Discovery Engine[/cyan]\n"
-            "[dim]v0.1.0 • Python 3.14+ • Async-first • PostgreSQL[/dim]",
-            border_style="bright_blue",
-            padding=(1, 4),
-        ))
+        _console.print(
+            Panel.fit(
+                "[bold magenta]RekonStrike[/bold magenta] — [cyan]Reconnaissance & Asset Discovery Engine[/cyan]\n"
+                "[dim]v0.1.0 • Python 3.14+ • Async-first • PostgreSQL[/dim]",
+                border_style="bright_blue",
+                padding=(1, 4),
+            )
+        )
 
     @staticmethod
     def info(msg: str):

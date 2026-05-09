@@ -1,12 +1,16 @@
 """Phase 4: Content discovery — crawling, JS analysis, parameter mining"""
+
 import asyncio
 from pathlib import Path
 from . import phase
 from ..output import out
 
 
-@phase(4, "Content Discovery",
-       "Web crawling, JavaScript analysis, endpoint extraction, parameter discovery")
+@phase(
+    4,
+    "Content Discovery",
+    "Web crawling, JavaScript analysis, endpoint extraction, parameter discovery",
+)
 class Phase:
     def __init__(self, ctx):
         self.ctx = ctx
@@ -21,6 +25,7 @@ class Phase:
         out.info(f"Content discovery on {len(targets)} targets")
 
         from ..tools.wrappers import GoSpider, Gau, Katana, Ffuf, CeWL
+
         all_endpoints: set[str] = set()
         tasks = []
 
@@ -72,6 +77,7 @@ class Phase:
 
     async def _run_gospider(self, tool, targets: list[str]) -> set[str]:
         import json
+
         discovered: set[str] = set()
         for url in targets[:10]:
             try:
@@ -92,6 +98,7 @@ class Phase:
 
     async def _run_gau(self, tool, targets: list[str]) -> set[str]:
         from urllib.parse import urlparse
+
         discovered: set[str] = set()
         for target in targets[:5]:
             domain = urlparse(target).hostname or ""

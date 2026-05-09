@@ -1,4 +1,5 @@
 """Phase 0: Scope validation and target initialization"""
+
 import json
 from pathlib import Path
 
@@ -51,7 +52,12 @@ class Phase:
             return
 
         try:
-            scopes = data.get("data", {}).get("relationships", {}).get("structured_scopes", {}).get("data", [])
+            scopes = (
+                data.get("data", {})
+                .get("relationships", {})
+                .get("structured_scopes", {})
+                .get("data", [])
+            )
         except AttributeError:
             out.warning("Unexpected scope file format")
             return
@@ -77,23 +83,24 @@ class Phase:
             self.ctx.scope.out_of_scope = out_of_scope_rules
 
         # Persist to ProgramScope table
-        async with await self.ctx.db.get_session() as s:
-            async with s.begin():
-                existing = await s.execute(
-                    select(ProgramScope).where(ProgramScope.target_id == self.ctx.target_id)
+        async with self.ctx.db_session.begin():
+            existing = await self.ctx.db_session.execute(
+                select(ProgramScope).where(ProgramScope.target_id == self.ctx.target_id)
+            )
+            ps = existing.scalar_one_or_none()
+            if ps:
+                ps.in_scope = in_scope_rules
+                ps.out_of_scope = out_of_scope_rules
+            else:
+                ps = ProgramScope(
+                    target_id=self.ctx.target_id,
+                    platform=self.ctx.settings.platform or "manual",
+                    program_handle=self.ctx.settings.program_handle or self.ctx.target,
+                    in_scope=in_scope_rules,
+                    out_of_scope=out_of_scope_rules,
                 )
-                ps = existing.scalar_one_or_none()
-                if ps:
-                    ps.in_scope = in_scope_rules
-                    ps.out_of_scope = out_of_scope_rules
-                else:
-                    ps = ProgramScope(
-                        target_id=self.ctx.target_id,
-                        platform=self.ctx.settings.platform or "manual",
-                        program_handle=self.ctx.settings.program_handle or self.ctx.target,
-                        in_scope=in_scope_rules,
-                        out_of_scope=out_of_scope_rules,
-                    )
-                    s.add(ps)
+                self.ctx.db_session.add(ps)
 
-        out.success(f"Loaded {len(in_scope_rules)} in-scope + {len(out_of_scope_rules)} out-of-scope rules")
+        out.success(
+            f"Loaded {len(in_scope_rules)} in-scope + {len(out_of_scope_rules)} out-of-scope rules"
+        )

@@ -92,7 +92,9 @@ async def get_test_suggestions(
     empty list on any failure.
     """
     user = _build_user_prompt(host, module, discovered_endpoints or [])
-    raw = await call_ai(SYSTEM_PROMPT, user, max_tokens=1500, provider=provider, model=model)
+    raw = await call_ai(
+        SYSTEM_PROMPT, user, max_tokens=1500, provider=provider, model=model
+    )
 
     if not raw:
         logger.info("AI advisor returned empty response")

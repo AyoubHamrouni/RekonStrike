@@ -27,12 +27,14 @@ class BugcrowdClient(PlatformClient):
                     break
                 for item in data.get("data", []):
                     attrs = item.get("attributes", {})
-                    programs.append({
-                        "handle": item.get("id", ""),
-                        "name": attrs.get("name", ""),
-                        "offers_bounties": attrs.get("bounty", False),
-                        "state": attrs.get("state", ""),
-                    })
+                    programs.append(
+                        {
+                            "handle": item.get("id", ""),
+                            "name": attrs.get("name", ""),
+                            "offers_bounties": attrs.get("bounty", False),
+                            "state": attrs.get("state", ""),
+                        }
+                    )
                 links = data.get("links", {})
                 url = links.get("next") if isinstance(links, dict) else None
         return programs

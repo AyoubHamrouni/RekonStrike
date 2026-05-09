@@ -2,11 +2,13 @@ from pydantic import BaseModel, Field
 from typing import Optional, Any
 from datetime import datetime
 
+
 class SubdomainSchema(BaseModel):
     subdomain: str
     source: str
     resolved: bool = False
     ip_address: Optional[str] = None
+
 
 class LiveHostSchema(BaseModel):
     url: str

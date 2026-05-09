@@ -1,7 +1,18 @@
 """Phase registry — import all phases to register them"""
+
 from ..engine import phase, get_registered_phases, _phase_registry
 
 # Import phases to trigger registration
-from . import phase0, phase1, phase2, phase2b, phase3, phase4, phase4b, phase5, phase6
+from . import (
+    validation,
+    passive_recon,
+    active_enum,
+    dns_brute,
+    http_probing,
+    content_discovery,
+    js_analysis,
+    vuln_scan,
+    roi_scoring,
+)
 
 __all__ = ["phase", "get_registered_phases"]

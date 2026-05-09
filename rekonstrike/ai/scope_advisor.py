@@ -83,7 +83,9 @@ async def analyze_scope_coverage(
     if not discovered_assets:
         return dict(_FALLBACK)
     user = _build_user_prompt(program_scope, discovered_assets)
-    raw = await call_ai(SYSTEM_PROMPT, user, max_tokens=2000, provider=provider, model=model)
+    raw = await call_ai(
+        SYSTEM_PROMPT, user, max_tokens=2000, provider=provider, model=model
+    )
     if not raw:
         logger.info("AI scope analysis returned empty — using fallback")
         return dict(_FALLBACK)

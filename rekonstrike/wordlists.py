@@ -38,7 +38,13 @@ async def _download(url: str, dest: Path) -> None:
                     downloaded += len(chunk)
                     if total:
                         pct = downloaded / total * 100
-                        logger.info("  %s: %.0f%% (%d/%d bytes)", dest.name, pct, downloaded, total)
+                        logger.info(
+                            "  %s: %.0f%% (%d/%d bytes)",
+                            dest.name,
+                            pct,
+                            downloaded,
+                            total,
+                        )
             logger.info("  %s complete (%d bytes)", dest.name, downloaded)
 
 

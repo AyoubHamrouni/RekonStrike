@@ -9,16 +9,13 @@ class PlatformClient(ABC):
 
     @property
     @abstractmethod
-    def platform_name(self) -> str:
-        ...
+    def platform_name(self) -> str: ...
 
     @abstractmethod
-    async def fetch_programs(self) -> list[dict]:
-        ...
+    async def fetch_programs(self) -> list[dict]: ...
 
     @abstractmethod
-    async def fetch_scope(self, program_handle: str) -> dict:
-        ...
+    async def fetch_scope(self, program_handle: str) -> dict: ...
 
     async def _request(self, session, url: str, **kwargs) -> dict | list:
         """Make an HTTP request with 429 retry (1 retry, 5s delay)."""
@@ -37,12 +34,13 @@ class PlatformClient(ABC):
                             return await resp.json()
                         text = await resp.text()
                         import json
+
                         try:
                             return json.loads(text)
                         except json.JSONDecodeError:
                             return {}
                     return {}
-            except (aiohttp.ClientError, asyncio.TimeoutError):
+            except aiohttp.ClientError, asyncio.TimeoutError:
                 if attempt == 0:
                     await asyncio.sleep(2)
                     continue

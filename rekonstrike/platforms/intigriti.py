@@ -28,12 +28,16 @@ class IntigritiClient(PlatformClient):
             for item in items:
                 attrs = item.get("attributes") or item
                 program_id = item.get("id") or attrs.get("id", "")
-                programs.append({
-                    "handle": program_id,
-                    "name": attrs.get("name", ""),
-                    "offers_bounties": attrs.get("bounty", {}).get("enabled", False),
-                    "state": attrs.get("status", ""),
-                })
+                programs.append(
+                    {
+                        "handle": program_id,
+                        "name": attrs.get("name", ""),
+                        "offers_bounties": attrs.get("bounty", {}).get(
+                            "enabled", False
+                        ),
+                        "state": attrs.get("status", ""),
+                    }
+                )
         return programs
 
     async def fetch_scope(self, program_handle: str) -> dict:

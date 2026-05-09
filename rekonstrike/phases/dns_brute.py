@@ -7,8 +7,11 @@ from ..output import out
 from ..takeover_signatures import SIGNATURES
 
 
-@phase(25, "Takeover Detection",
-       "Checks resolved subdomains for subdomain takeover vulnerability")
+@phase(
+    25,
+    "Takeover Detection",
+    "Checks resolved subdomains for subdomain takeover vulnerability",
+)
 class Phase:
     def __init__(self, ctx):
         self.ctx = ctx
@@ -17,15 +20,14 @@ class Phase:
         # 1. Query resolved subdomains for this target
         from ..database import Subdomain
 
-        async with await self.ctx.db.get_session() as s:
-            async with s.begin():
-                rows = await s.execute(
-                    select(Subdomain.id, Subdomain.subdomain).where(
-                        Subdomain.target_id == self.ctx.target_id,
-                        Subdomain.resolved,
-                    )
+        async with self.ctx.db_session.begin():
+            rows = await self.ctx.db_session.execute(
+                select(Subdomain.id, Subdomain.subdomain).where(
+                    Subdomain.target_id == self.ctx.target_id,
+                    Subdomain.resolved,
                 )
-                subs = {(r[0], r[1]) for r in rows.fetchall()}
+            )
+            subs = {(r[0], r[1]) for r in rows.fetchall()}
 
         if not subs:
             out.warning("No resolved subdomains to check for takeovers")
@@ -39,30 +41,29 @@ class Phase:
             result = await self._check_takeover(sub_id, subdomain)
             if result:
                 findings.append(result["finding"])
-                if result["vuln"]:
-                    vulns.append(result["vuln"])
+            if result["vuln"]:
+                vulns.append(result["vuln"])
 
         # 3. Bulk insert findings
         if findings:
             from sqlalchemy import insert
             from ..database import TakeoverFinding, Vulnerability
 
-            async with await self.ctx.db.get_session() as s:
-                async with s.begin():
-                    stmt = insert(TakeoverFinding)
-                    if self.ctx.settings.db_type == "postgresql":
-                        stmt = stmt.on_conflict_do_nothing()
-                    else:
-                        stmt = stmt.prefix_with("OR IGNORE")
-                    await s.execute(stmt.values(findings))
+            async with self.ctx.db_session.begin():
+                stmt = insert(TakeoverFinding)
+                if self.ctx.settings.db_type == "postgresql":
+                    stmt = stmt.on_conflict_do_nothing()
+                else:
+                    stmt = stmt.prefix_with("OR IGNORE")
+                await self.ctx.db_session.execute(stmt.values(findings))
 
-                    if vulns:
-                        vstmt = insert(Vulnerability)
-                        if self.ctx.settings.db_type == "postgresql":
-                            vstmt = vstmt.on_conflict_do_nothing()
-                        else:
-                            vstmt = vstmt.prefix_with("OR IGNORE")
-                        await s.execute(vstmt.values(vulns))
+                if vulns:
+                    vstmt = insert(Vulnerability)
+                    if self.ctx.settings.db_type == "postgresql":
+                        vstmt = vstmt.on_conflict_do_nothing()
+                    else:
+                        vstmt = vstmt.prefix_with("OR IGNORE")
+                    await self.ctx.db_session.execute(vstmt.values(vulns))
 
         services = {f["service"] for f in findings}
         out.result("Takeover Findings", sorted(services))
@@ -133,6 +134,7 @@ class Phase:
             result = await dnsx.execute(["-d", subdomain, "-cname", "-json", "-silent"])
             for line in result.lines():
                 import json
+
                 try:
                     data = json.loads(line)
                     cname = data.get("cname", "")

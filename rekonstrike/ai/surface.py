@@ -42,9 +42,9 @@ def _build_user_prompt(hosts: list[dict], target: str) -> str:
         lines.append("")
     lines.append(
         "Respond with a JSON object with these keys:\n"
-        "- anomalies: max 5 items, each {\"url\": str, \"reason\": str}\n"
+        '- anomalies: max 5 items, each {"url": str, "reason": str}\n'
         "- technology_patterns: 3-5 string observations\n"
-        "- recommended_focus: top 3, each {\"url\": str, \"rationale\": str}\n"
+        '- recommended_focus: top 3, each {"url": str, "rationale": str}\n'
         "- surface_summary: 2-3 sentence string\n\n"
         "Return ONLY valid JSON. No markdown fences, no extra text."
     )
@@ -85,7 +85,9 @@ async def analyze_attack_surface(
         return dict(FALLBACK)
 
     user = _build_user_prompt(hosts, target)
-    raw = await call_ai(SYSTEM_PROMPT, user, max_tokens=2000, provider=provider, model=model)
+    raw = await call_ai(
+        SYSTEM_PROMPT, user, max_tokens=2000, provider=provider, model=model
+    )
 
     if not raw:
         logger.info("AI surface analysis returned empty response — using fallback")

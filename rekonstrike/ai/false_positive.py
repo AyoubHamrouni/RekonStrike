@@ -72,7 +72,9 @@ async def filter_false_positives(
     if not findings:
         return []
     user = _build_user_prompt(findings, target_url)
-    raw = await call_ai(SYSTEM_PROMPT, user, max_tokens=2000, provider=provider, model=model)
+    raw = await call_ai(
+        SYSTEM_PROMPT, user, max_tokens=2000, provider=provider, model=model
+    )
     if not raw:
         logger.info("AI FP-filter returned empty — using defaults")
         for f in findings:
