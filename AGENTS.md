@@ -25,7 +25,7 @@ RekonStrike v2 is a professional-grade offensive security framework that separat
 2.  **Install external tools:**
     ```bash
     # Checks for required Go/Python tools
-    python -m rekonstrike install
+    python3 -m rekonstrike install
     ```
 3.  **Database Migrations:**
     ```bash
@@ -35,10 +35,10 @@ RekonStrike v2 is a professional-grade offensive security framework that separat
 ### Running the Application
 - **CLI Scan:**
     ```bash
-    # Run a full scan
-    python -m rekonstrike scan example.com
+    # Run a full scan (requires 'pip install -e .')
+    rekonstrike scan example.com
     # Run specific phases (e.g., Passive OSINT)
-    python -m rekonstrike scan example.com -p 1
+    rekonstrike scan example.com -p 1
     ```
 - **API Server:**
     ```bash
@@ -68,8 +68,8 @@ pytest
 ## 🛠 Development Conventions
 
 ### Architecture Patterns
-- **Repository Pattern:** Located in `rekonstrike/repositories/`. Decouples business logic from database operations.
-- **Service Layer:** `rekonstrike/services/` orchestrates complex multi-repository workflows.
+- **Repository Pattern:** Located in `src/rekonstrike/repositories/`. Decouples business logic from database operations.
+- **Service Layer:** `src/rekonstrike/services/` orchestrates complex multi-repository workflows.
 - **Phase Plugin System:** Each recon phase is a class decorated with `@phase`. Phases share data via `PhaseContext`.
 - **Async First:** The entire backend is built using `async/await` for high-concurrency tool execution.
 
@@ -88,10 +88,10 @@ pytest
 - **Phase 6:** ROI Scoring (Prioritization).
 
 ## 📂 Key Files
-- `rekonstrike/cli.py`: Main CLI entry point.
-- `rekonstrike/engine.py`: Pipeline execution logic.
-- `rekonstrike/config.py`: Pydantic settings and YAML configuration.
-- `rekonstrike/api/server.py`: FastAPI application setup.
-- `rekonstrike/tasks.py`: ARQ background task definitions.
+- `src/rekonstrike/cli.py`: Main CLI entry point.
+- `src/rekonstrike/engine.py`: Pipeline execution logic.
+- `src/rekonstrike/config.py`: Pydantic settings and YAML configuration.
+- `src/rekonstrike/api/server.py`: FastAPI application setup.
+- `src/rekonstrike/tasks.py`: ARQ background task definitions.
 - `ui/src/App.jsx`: React frontend entry point.
 - `alembic.ini`: Database migration configuration.

@@ -12,6 +12,7 @@ RUN npm run build
 FROM python:3.14-slim AS api
 
 WORKDIR /app
+ENV PYTHONPATH=/app/src
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc libpq-dev curl && \
@@ -20,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY rekonstrike/ rekonstrike/
+COPY src/ src/
 COPY migrations/ migrations/
 COPY alembic.ini .
 COPY config.yaml .

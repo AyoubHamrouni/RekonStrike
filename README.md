@@ -52,21 +52,21 @@ RekonStrike is structured to separate deterministic automation from human judgme
 ### 1. Installation
 ```bash
 git clone https://github.com/your-org/rekonstrike.git
-cd rekonstrike/rekonstrike
+cd rekonstrike
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### 2. Initialize Tools
 ```bash
 # Checks for required Go tools (Subfinder, Httpx, Nuclei, etc.)
-python -m rekonstrike install
+rekonstrike install
 ```
 
 ### 3. Launch a Scan
 ```bash
 # Start a wildcard scan
-python -m rekonstrike scan example.com -t wildcard
+rekonstrike scan example.com -t wildcard
 ```
 
 ### 4. Start the Web UI & API

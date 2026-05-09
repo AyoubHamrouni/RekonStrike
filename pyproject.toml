@@ -27,4 +27,4 @@ dependencies = [
 rekonstrike = "rekonstrike.cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["rekonstrike"]
+packages = ["src/rekonstrike"]

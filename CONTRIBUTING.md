@@ -30,7 +30,7 @@ Be respectful, inclusive, and constructive. We're all here to learn and build so
 3. Make your changes following the code style
 4. Add or update tests as needed
 5. Run tests: `python -m pytest tests/ -x -q`
-6. Run lint: `ruff check rekonstrike/`
+6. Run lint: `ruff check src/rekonstrike/`
 7. Ensure the frontend builds: `cd ui && npm run build`
 8. Submit a PR with a clear description of the changes
 
@@ -55,20 +55,21 @@ RekonStrike follows a decoupled **Repository/Service Architecture**:
 
 ```
 rekonstrike/
-├── rekonstrike/           # Python package
-│   ├── api/              # Delivery Layer (FastAPI)
-│   │   ├── routers/      # Modular API routes (scans.py, targets.py)
-│   │   ├── deps.py       # Dependency injection
-│   │   └── manager.py    # WebSocket connection manager
-│   ├── services/         # Orchestration Layer (ScanService, etc.)
-│   ├── repositories/     # Persistence Layer (Data access objects)
-│   ├── phases/           # Reconnaissance Phases (0-6)
-│   ├── tools/            # Async subprocess wrappers
-│   ├── config.py         # Settings & Config management
-│   ├── database.py       # SQLAlchemy models & Engine setup
-│   ├── engine.py         # Pipeline execution engine
-│   ├── schemas.py        # Pydantic data transport schemas
-│   └── tasks.py          # Task queue management
+├── src/
+│   └── rekonstrike/      # Python package
+│       ├── api/          # Delivery Layer (FastAPI)
+│       │   ├── routers/  # Modular API routes
+│       │   ├── deps.py   # Dependency injection
+│       │   └── manager.py
+│       ├── services/     # Orchestration Layer
+│       ├── repositories/ # Persistence Layer
+│       ├── phases/       # Reconnaissance Phases
+│       ├── tools/        # Async tool wrappers
+│       ├── config.py     # Settings
+│       ├── database.py   # Models
+│       ├── engine.py     # Pipeline
+│       ├── schemas.py    # Pydantic models
+│       └── tasks.py      # Background tasks
 ├── ui/                   # React + Vite frontend
 ├── docker/               # Tool isolation containers
 ├── tests/                # Automated test suite
