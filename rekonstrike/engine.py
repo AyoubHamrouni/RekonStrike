@@ -1,18 +1,19 @@
 """Phase pipeline engine — decorator-based plugin registry with async execution"""
 import asyncio
-import importlib
-import pkgutil
 import time
 from dataclasses import dataclass, field
-from typing import Optional, Callable, Awaitable
+from pathlib import Path
+from typing import Optional, Callable
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import Settings
-from .database import Database, ScopeTarget
+from .database import Database
 from .output import out
 from .scope import Scope
 from .runner import ToolRunner
+from .repositories.target_repo import TargetRepository
+from .repositories.session_repo import SessionRepository
 
 
 # ─── Phase Registry ───────────────────────────────────────────────────────────
@@ -55,6 +56,7 @@ class PhaseContext:
     # Data flowing between phases
     subdomains: set[str] = field(default_factory=set)
     live_hosts: list[dict] = field(default_factory=list)
+    wordlists: dict[str, Path] = field(default_factory=dict)
 
     async def emit(self, event: str, data: dict):
         for cb in self.event_callbacks:
@@ -77,8 +79,18 @@ class Pipeline:
         scope = Scope.from_target(target, target_type)
         runner = ToolRunner(self.settings)
 
-        # Create target and scan session in a single transaction
-        session_id, target_id = await self._init_scan(target, target_type)
+        async with await self.db.get_session() as s:
+            target_repo = TargetRepository(s)
+            session_repo = SessionRepository(s)
+            
+            async with s.begin():
+                scope_obj = await target_repo.get_or_create_target(target, target_type)
+                session_id = (await session_repo.create_session(
+                    target_id=scope_obj.id,
+                    workflow=target_type,
+                    config_snapshot=self.settings.model_dump(mode="json")
+                )).id
+                target_id = scope_obj.id
 
         ctx = PhaseContext(
             target=target, target_type=target_type,
@@ -87,6 +99,8 @@ class Pipeline:
             session_id=session_id, target_id=target_id,
             db_session=None,
         )
+        from .wordlists import WORDLISTS as _wl
+        ctx.wordlists = _wl
         if event_callback:
             ctx.event_callbacks.append(event_callback)
 
@@ -120,46 +134,21 @@ class Pipeline:
                 await ctx.emit("phase_error", {
                     "phase": num, "name": name, "error": str(e), "elapsed": elapsed,
                 })
-                await self._update_session_status(session_id, "failed", str(e))
+                async with await self.db.get_session() as s:
+                    async with s.begin():
+                        await SessionRepository(s).update_status(session_id, "failed", str(e))
                 raise
 
-        await self._update_session_status(session_id, "completed")
+        async with await self.db.get_session() as s:
+            async with s.begin():
+                await SessionRepository(s).update_status(session_id, "completed")
+                
         await ctx.emit("scan_complete", {})
         out.divider()
         out.success(f"Scan complete for [bold]{target}[/bold]")
         self._summary(ctx)
         return ctx
 
-    async def _init_scan(self, target: str, target_type: str) -> tuple[int, int]:
-        async with await self.db.get_session() as s:
-            async with s.begin():
-                scope_obj = await self.db.get_or_create_target(target, target_type, s)
-                from .database import ScanSession
-                scan_sesh = ScanSession(
-                    target_id=scope_obj.id,
-                    workflow=target_type,
-                    status="running",
-                    config_snapshot=self.settings.model_dump(mode="json"),
-                )
-                s.add(scan_sesh)
-                await s.flush()
-                return scan_sesh.id, scope_obj.id
-
-    async def _update_session_status(self, session_id: int, status: str,
-                                      error: Optional[str] = None):
-        async with await self.db.get_session() as s:
-            async with s.begin():
-                from .database import ScanSession
-                from sqlalchemy import update
-                vals = {"status": status}
-                if status == "completed":
-                    from sqlalchemy import func
-                    vals["ended_at"] = func.now()
-                if error:
-                    vals["error_message"] = error
-                await s.execute(
-                    update(ScanSession).where(ScanSession.id == session_id).values(**vals)
-                )
 
     def _summary(self, ctx: PhaseContext):
         out.phase(99, "Summary")

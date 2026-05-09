@@ -15,6 +15,27 @@ from sqlalchemy import (
 from .config import Settings
 
 
+# ─── URL Normalization ─────────────────────────────────────────────────────────
+
+def normalize_host(raw: str) -> str:
+    """Strip scheme, port, trailing slash, and wildcard prefix from a URL or hostname."""
+    from urllib.parse import urlparse
+    raw = raw.strip().lower()
+    if raw.startswith("*."):
+        raw = raw[2:]
+    if raw.startswith(("http://", "https://")):
+        parsed = urlparse(raw)
+        host = parsed.hostname or raw
+    else:
+        host = raw
+    for port in (":80", ":443"):
+        if host.endswith(port):
+            host = host[: -len(port)]
+            break
+    host = host.rstrip("/")
+    return host
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -37,6 +58,27 @@ class ScopeTarget(Base):
     subdomains = relationship("Subdomain", back_populates="target", cascade="all, delete-orphan")
     dns_records = relationship("DNSRecord", back_populates="target", cascade="all, delete-orphan")
     sessions = relationship("ScanSession", back_populates="target", cascade="all, delete-orphan")
+    program_scopes = relationship("ProgramScope", back_populates="target", cascade="all, delete-orphan")
+    secret_findings = relationship("SecretFinding", back_populates="target", cascade="all, delete-orphan")
+    ai_insights = relationship("AIInsight", back_populates="target", cascade="all, delete-orphan")
+
+
+class ProgramScope(Base):
+    __tablename__ = "program_scopes"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    target_id: Mapped[int] = mapped_column(ForeignKey("scope_targets.id", ondelete="CASCADE"))
+    platform: Mapped[str] = mapped_column(String(20))  # hackerone|bugcrowd|intigriti|manual
+    program_handle: Mapped[str] = mapped_column(String(255))
+    in_scope: Mapped[list[str]] = mapped_column(JSON, default=list)
+    out_of_scope: Mapped[list[str]] = mapped_column(JSON, default=list)
+    bounty_min: Mapped[Optional[int]] = mapped_column(Integer)
+    bounty_max: Mapped[Optional[int]] = mapped_column(Integer)
+    currency: Mapped[str] = mapped_column(String(10), default="USD")
+    last_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+    target = relationship("ScopeTarget", back_populates="program_scopes")
 
 
 class Subdomain(Base):
@@ -77,6 +119,26 @@ class DNSRecord(Base):
     target = relationship("ScopeTarget", back_populates="dns_records")
 
 
+class SecretFinding(Base):
+    __tablename__ = "secret_findings"
+    __table_args__ = (
+        Index("ix_secret_target", "target_id"),
+        Index("ix_secret_detector", "detector_name"),
+        Index("ix_secret_status", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    target_id: Mapped[int] = mapped_column(ForeignKey("scope_targets.id", ondelete="CASCADE"))
+    source_url: Mapped[Optional[str]] = mapped_column(String(2048))
+    detector_name: Mapped[str] = mapped_column(String(100))
+    raw_secret: Mapped[Optional[str]] = mapped_column(Text)
+    redacted: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="unverified")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+    target = relationship("ScopeTarget", back_populates="secret_findings")
+
+
 class LiveHost(Base):
     __tablename__ = "live_hosts"
     __table_args__ = (
@@ -88,6 +150,7 @@ class LiveHost(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     subdomain_id: Mapped[Optional[int]] = mapped_column(ForeignKey("subdomains.id", ondelete="SET NULL"))
     url: Mapped[str] = mapped_column(String(1024), nullable=False)
+    raw_url: Mapped[Optional[str]] = mapped_column(String(1024))
     status_code: Mapped[Optional[int]] = mapped_column(Integer)
     title: Mapped[Optional[str]] = mapped_column(String(500))
     technologies: Mapped[Optional[dict]] = mapped_column(JSON)
@@ -137,9 +200,46 @@ class Vulnerability(Base):
     description: Mapped[Optional[str]] = mapped_column(Text)
     matched_at: Mapped[Optional[str]] = mapped_column(String(1024))
     curl_command: Mapped[Optional[str]] = mapped_column(Text)
+    fp_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     live_host = relationship("LiveHost", back_populates="vulnerabilities")
+
+
+class TakeoverFinding(Base):
+    __tablename__ = "takeover_findings"
+    __table_args__ = (
+        Index("ix_takeover_subdomain", "subdomain_id"),
+        Index("ix_takeover_service", "service"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    subdomain_id: Mapped[int] = mapped_column(ForeignKey("subdomains.id", ondelete="CASCADE"))
+    service: Mapped[str] = mapped_column(String(100))
+    cname_value: Mapped[str] = mapped_column(String(500))
+    fingerprint_matched: Mapped[str] = mapped_column(Text)
+    confidence: Mapped[str] = mapped_column(String(20))
+    status_code: Mapped[Optional[int]] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+class AIInsight(Base):
+    __tablename__ = "ai_insights"
+    __table_args__ = (
+        UniqueConstraint("target_id", "insight_type", "input_hash", name="uq_ai_insight"),
+        Index("ix_ai_insight_target", "target_id"),
+        Index("ix_ai_insight_type", "insight_type"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    target_id: Mapped[int] = mapped_column(ForeignKey("scope_targets.id", ondelete="CASCADE"))
+    insight_type: Mapped[str] = mapped_column(String(50))  # triage | surface | advisor
+    input_hash: Mapped[str] = mapped_column(String(64))  # sha256 to deduplicate
+    result: Mapped[dict] = mapped_column(JSON)
+    model_used: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+    target = relationship("ScopeTarget", back_populates="ai_insights")
 
 
 class ScanSession(Base):
@@ -215,21 +315,6 @@ class Database:
 
     async def close(self):
         await self.engine.dispose()
-
-    # ─── Convenience queries ───────────────────────────────────────────────
-
-    async def get_or_create_target(self, target: str, target_type: str,
-                                    session: AsyncSession) -> ScopeTarget:
-        result = await session.execute(
-            select(ScopeTarget).where(ScopeTarget.target == target)
-        )
-        obj = result.scalar_one_or_none()
-        if obj is None:
-            obj = ScopeTarget(target=target, target_type=target_type)
-            session.add(obj)
-            await session.flush()
-            await session.refresh(obj)
-        return obj
 
     async def count(self, model, session: Optional[AsyncSession] = None, **filters) -> int:
         if session:

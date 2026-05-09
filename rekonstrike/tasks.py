@@ -30,8 +30,9 @@ async def scan_task(ctx: dict, target: str, target_type: str, phases: Optional[l
 class TaskManager:
     """Enqueues scan jobs via ARQ/Redis, falls back to direct asyncio tasks in dev."""
 
-    def __init__(self, redis_url: str = ""):
+    def __init__(self, redis_url: str = "", settings: Optional[dict] = None):
         self.redis_url = redis_url
+        self._settings = settings or {}
         self._pool = None
         self._direct_tasks: dict[int, asyncio.Task] = {}
 
@@ -54,8 +55,10 @@ class TaskManager:
 
     async def enqueue_scan(self, session_id: int, target: str, target_type: str,
                            phases: Optional[list[int]] = None,
-                           on_event: Optional[Callable] = None) -> bool:
+                           on_event: Optional[Callable] = None,
+                           settings_dict: Optional[dict] = None) -> bool:
         """Enqueue a scan. Returns True if queued via ARQ, False if running directly."""
+        sd = settings_dict or self._settings
         if self._pool:
             from arq.connections import ArqRedis
             pool: ArqRedis = self._pool
@@ -64,13 +67,14 @@ class TaskManager:
                 target=target,
                 target_type=target_type,
                 phases=phases,
+                _ctx={"settings": sd},
             )
             if job:
                 logger.info("Enqueued scan job %s for %s", job.job_id, target)
                 return True
 
         # Fallback: run directly as asyncio task
-        await self._run_direct(session_id, target, target_type, phases, on_event)
+        await self._run_direct(session_id, target, target_type, phases, on_event, sd)
         return False
 
     async def cancel_scan(self, session_id: int) -> bool:
@@ -92,13 +96,15 @@ class TaskManager:
         return False
 
     async def _run_direct(self, session_id: int, target: str, target_type: str,
-                          phases: Optional[list[int]], on_event: Optional[Callable]):
+                          phases: Optional[list[int]], on_event: Optional[Callable],
+                          settings_dict: dict):
         from ..config import Settings
         from ..database import Database
         from ..engine import Pipeline
 
-        settings = Settings()
+        settings = Settings(**settings_dict)
         db = Database(settings)
+        # In _run_direct, the Pipeline already uses repositories
         await db.create_all()
 
         pipeline = Pipeline(settings, db)
@@ -119,8 +125,8 @@ class TaskManager:
 _manager: Optional[TaskManager] = None
 
 
-def get_task_manager(redis_url: str = "") -> TaskManager:
+def get_task_manager(redis_url: str = "", settings: Optional[dict] = None) -> TaskManager:
     global _manager
     if _manager is None:
-        _manager = TaskManager(redis_url)
+        _manager = TaskManager(redis_url, settings)
     return _manager

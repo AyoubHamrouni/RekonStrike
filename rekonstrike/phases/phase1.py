@@ -1,7 +1,7 @@
 """Phase 1: Passive reconnaissance — OSINT subdomain enumeration"""
-import asyncio
 from . import phase
 from ..output import out
+from ..repositories.target_repo import TargetRepository
 
 
 @phase(1, "Passive Reconnaissance",
@@ -57,11 +57,18 @@ class Phase:
                     out.warning(f"GitHub recon failed: {e}")
 
         # ── Filter & Store ────────────────────────────────────────────────
-        valid = {s.lower().strip() for s in all_subs
-                 if s and self.ctx.scope.is_in_scope(s)}
+        from ..database import normalize_host
+        valid = set()
+        for s in all_subs:
+            h = normalize_host(s.lower().strip()) if s else ""
+            if h and self.ctx.scope.is_in_scope(h):
+                valid.add(h)
 
-        from ..database import Subdomain
-        from sqlalchemy import select, insert
+        # Normalize existing subdomains (may contain URLs)
+        for s in getattr(self.ctx, "subdomains", []):
+            h = normalize_host(s)
+            if h and self.ctx.scope.is_in_scope(h):
+                valid.add(h)
 
         max_subs = self.ctx.settings.max_subdomains
         valid_sorted = sorted(valid)
@@ -70,37 +77,11 @@ class Phase:
             out.warning(f"Capping {len(valid_sorted)} subdomains to max {max_subs}")
             valid_sorted = valid_sorted[:max_subs]
 
-        # Bulk insert — multi-row INSERT for performance
-        BATCH_SIZE = 2000
+        # Use Repository for storage
         async with await self.ctx.db.get_session() as s:
             async with s.begin():
-                existing_rows = await s.execute(
-                    select(Subdomain.subdomain).where(
-                        Subdomain.target_id == self.ctx.target_id
-                    )
-                )
-                existing = {r[0] for r in existing_rows.fetchall()}
-
-                new_subs = [sub for sub in valid_sorted if sub not in existing]
-
-                stmt = insert(Subdomain)
-                if self.ctx.settings.db_type == "postgresql":
-                    stmt = stmt.on_conflict_do_nothing(
-                        index_elements=["target_id", "subdomain"]
-                    )
-                else:
-                    stmt = stmt.prefix_with("OR IGNORE")
-
-                for i in range(0, len(new_subs), BATCH_SIZE):
-                    batch = new_subs[i:i + BATCH_SIZE]
-                    await s.execute(
-                        stmt.values([
-                            {"target_id": self.ctx.target_id,
-                             "subdomain": sub, "source": "passive",
-                             "resolved": False}
-                            for sub in batch
-                        ])
-                    )
+                repo = TargetRepository(s)
+                await repo.add_subdomains(self.ctx.target_id, valid_sorted, source="passive")
 
         out.result("Passive Subdomains", sorted(valid))
         self.ctx.subdomains = valid

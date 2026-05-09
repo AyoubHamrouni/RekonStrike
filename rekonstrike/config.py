@@ -42,8 +42,35 @@ class Settings(BaseSettings):
         "censys": "", "hackerone": "", "whoisxmlapi": "",
     })
 
+    # Platform API Keys (overridable via RS_PLATFORM_API_KEYS__HACKERONE=xxx)
+    platform_api_keys: dict[str, str] = Field(default_factory=lambda: {
+        "hackerone": "", "bugcrowd": "", "intigriti": "",
+    })
+
     # Server API key for web API authentication (empty = no auth)
     server_api_key: str = ""
+
+    # Program scope (bug bounty)
+    scope_file: str = ""
+    program_handle: str = ""
+    platform: str = ""
+
+    # AI providers
+    ai_provider: str = "openai"
+    default_ai_model: str = "gpt-4o-mini"
+
+    # AI provider API keys (overridable via RS_AI_API_KEYS__OPENAI=xxx)
+    ai_api_keys: dict[str, str] = Field(default_factory=lambda: {
+        "openai": "", "anthropic": "", "google": "", "openrouter": "",
+    })
+
+    # AI provider base URLs for custom endpoints
+    ai_base_urls: dict[str, str] = Field(default_factory=lambda: {
+        "openai": "https://api.openai.com/v1",
+        "anthropic": "https://api.anthropic.com",
+        "google": "",
+        "openrouter": "https://openrouter.ai/api/v1",
+    })
 
     # Paths
     go_bin: str = "~/go/bin"

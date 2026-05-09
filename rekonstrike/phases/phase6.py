@@ -3,6 +3,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from sqlalchemy import select, func
+
 from . import phase
 from ..output import out
 from ..scoring import Scorer
@@ -18,7 +20,7 @@ class Phase:
     async def run(self):
         out.info("Calculating ROI scores and generating report")
 
-        from ..database import LiveHost, Subdomain
+        from ..database import TakeoverFinding, SecretFinding
         async with await self.ctx.db.get_session() as s:
             async with s.begin():
                 rows = await s.execute(
@@ -26,9 +28,29 @@ class Phase:
                 )
                 hosts = [dict(r._mapping) for r in rows.fetchall()]
 
+                # Pre-query takeover findings per subdomain
+                take_rows = await s.execute(
+                    select(TakeoverFinding.subdomain_id, func.count().label("cnt"))
+                    .group_by(TakeoverFinding.subdomain_id)
+                )
+                takeover_counts = {r.subdomain_id: r.cnt for r in take_rows.fetchall()}
+
+                # Pre-query secret findings for this target
+                secret_count = await s.execute(
+                    select(func.count()).select_from(SecretFinding)
+                    .where(SecretFinding.target_id == self.ctx.target_id)
+                )
+                total_secrets = secret_count.scalar() or 0
+
+        # Get program data from settings or target's ProgramScope
+        program = await self._get_program_data()
+
         scored: list[tuple[int, str, list[str]]] = []
         for host in hosts:
-            score, signals = Scorer.score(host)
+            sub_id = host.get("subdomain_id")
+            host["takeover_findings"] = [1] * takeover_counts.get(sub_id, 0)
+            host["secret_findings"] = [1] * (total_secrets if sub_id else 0)
+            score, signals = Scorer.score(host, program)
             host["roi_score"] = score
             scored.append((score, host.get("url", ""), signals))
 
@@ -46,7 +68,7 @@ class Phase:
         async with await self.ctx.db.get_session() as s:
             async with s.begin():
                 sub_count = await self.ctx.db.count(Subdomain, target_id=self.ctx.target_id)
-                live_count = await self.ctx.db.count(LiveHost)
+                live_count = await self.ctx.db.count(LiveHost, target_id=self.ctx.target_id)
                 vuln_count = await self.ctx.db.count(Vulnerability)
 
         report = {
@@ -75,3 +97,20 @@ class Phase:
 
         out.success(f"Report saved: {path}")
         out.success("Phase 6 complete")
+
+    async def _get_program_data(self) -> dict | None:
+        from ..database import ProgramScope
+        async with await self.ctx.db.get_session() as s:
+            async with s.begin():
+                row = await s.execute(
+                    select(ProgramScope).where(ProgramScope.target_id == self.ctx.target_id)
+                )
+                p = row.scalar_one_or_none()
+                if p:
+                    return {
+                        "platform": p.platform,
+                        "program_handle": p.program_handle,
+                        "bounty_min": p.bounty_min,
+                        "bounty_max": p.bounty_max,
+                    }
+        return None

@@ -2,24 +2,28 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   Globe, Shield, Activity, BarChart3, Download,
-  RefreshCw, ArrowLeft, ChevronRight, ExternalLink, HelpCircle, BookOpen,
+  RefreshCw, ArrowLeft, ChevronRight, ExternalLink, HelpCircle, BookOpen, BugPlay, Brain,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import {
   fetchTargets, fetchStats, fetchSubdomains, fetchLiveHosts,
-  fetchVulnerabilities, fetchEndpoints,
+  fetchVulnerabilities, fetchEndpoints, fetchProgramScope,
 } from "../api";
 import SubdomainList from "./SubdomainList";
 import LiveHostList from "./LiveHostList";
 import VulnerabilityList from "./VulnerabilityList";
 import EndpointList from "./EndpointList";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
+import ManualWorkspace from "./ManualWorkspace";
+import FindingTracker from "./FindingTracker";
+import AIPanel from "./AIPanel";
 
 const tabs = [
   { key: "subdomains", label: "Subdomains", icon: Globe, desc: "All discovered domains under this target. Each subdomain expands your attack surface." },
   { key: "hosts", label: "Live Hosts", icon: Activity, desc: "Subdomains confirmed alive via HTTP probing. These are your actual targets." },
   { key: "vulns", label: "Vulnerabilities", icon: Shield, desc: "Security issues found by Nuclei templates. Severity = how critical the finding is." },
   { key: "endpoints", label: "Endpoints", icon: BarChart3, desc: "Crawled URLs, API routes, JS files, and hidden paths found during content discovery." },
+  { key: "manual", label: "Manual Testing", icon: BugPlay, desc: "Guided manual testing modules with step-by-step instructions for common vulnerability classes." },
 ];
 
 const tabLearn = {
@@ -27,6 +31,7 @@ const tabLearn = {
   hosts: "Live hosts are subdomains that actually respond to HTTP requests. A subdomain might exist in DNS but have no web server. These are what you'll actually test.",
   vulns: "Vulnerabilities are ranked by severity: Critical (immediate RCE/data breach), High (significant impact), Medium (limited impact), Low (informational). Start with Critical/High first.",
   endpoints: "Endpoints are specific URLs found by crawling and fuzzing. Look for: /api, /admin, /graphql, /swagger, /backup, /.git, /debug. These are where bugs hide.",
+  manual: "Manual testing modules guide you through specific vulnerability checks with real payloads and step-by-step instructions. Use the Discover → Test → Verify workflow for each module. Findings are saved locally in your browser.",
 };
 
 const severityColors = { critical: "#e05a4f", high: "#f0b429", medium: "#4a9eff", low: "#7c7e94", info: "#00d4aa" };
@@ -92,6 +97,9 @@ export default function TargetDetail() {
   const [tab, setTab] = useState("subdomains");
   const [loading, setLoading] = useState(true);
   const [showLearn, setShowLearn] = useState(false);
+  const [showTracker, setShowTracker] = useState(false);
+  const [showAI, setShowAI] = useState(false);
+  const [hasProgramScope, setHasProgramScope] = useState(false);
   const [data, setData] = useState({ subdomains: { items: [], total: 0 }, hosts: { items: [], total: 0 }, vulns: { items: [], total: 0 }, endpoints: { items: [], total: 0 } });
 
   const load = useCallback(() => {
@@ -99,9 +107,11 @@ export default function TargetDetail() {
     Promise.all([
       fetchTargets().then((ts) => ts.find((t) => t.id === Number(id))),
       fetchStats(id),
-    ]).then(([t, s]) => {
+      fetchProgramScope(id).then(() => true).catch(() => false),
+    ]).then(([t, s, hasScope]) => {
       setTarget(t);
       setStats(s);
+      setHasProgramScope(hasScope);
     }).catch(() => toast.error("Failed to load target")).finally(() => setLoading(false));
   }, [id]);
 
@@ -183,6 +193,11 @@ export default function TargetDetail() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => setShowAI(!showAI)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent-subtle text-accent text-xs font-medium hover:bg-accent/20 transition-colors">
+            <Brain size={13} />
+            {showAI ? "Hide AI" : "AI Analysis"}
+          </button>
           <button onClick={() => setShowLearn(!showLearn)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent-subtle text-accent text-xs font-medium hover:bg-accent/20 transition-colors">
             <BookOpen size={13} />
@@ -196,7 +211,20 @@ export default function TargetDetail() {
         </div>
       </div>
 
-      {showLearn && (
+      {showTracker && (
+        <div className="animate-fade-in">
+          <div className="flex items-center gap-2 mb-3">
+            <button onClick={() => setShowTracker(false)}
+              className="inline-flex items-center gap-1.5 text-xs text-text-dim hover:text-text transition-colors">
+              <ArrowLeft size={14} />
+              Back to target
+            </button>
+          </div>
+          <FindingTracker targetId={id} targetUrl={target?.target} onClose={() => setShowTracker(false)} />
+        </div>
+      )}
+
+      {!showTracker && showLearn && (
         <LearnCard>
           <strong className="text-text">Understanding your recon results:</strong><br />
           <strong>Subdomains</strong> = every domain discovered → <strong>Live Hosts</strong> = ones that actually respond → <strong>Vulnerabilities</strong> = security issues found → <strong>Endpoints</strong> = specific URLs/resources discovered.<br />
@@ -262,10 +290,19 @@ export default function TargetDetail() {
                   <Download size={14} />
                   Vulns (CSV)
                 </a>
+                <button onClick={() => setShowTracker(true)}
+                  className="flex items-center gap-2 p-3 rounded-lg bg-surface-2 hover:bg-border transition-colors text-xs text-text-dim hover:text-text">
+                  <BugPlay size={14} />
+                  Finding Tracker
+                </button>
               </div>
             </div>
           </div>
         </>
+      )}
+
+      {showAI && (
+        <AIPanel targetId={id} stats={stats} hasProgramScope={hasProgramScope} />
       )}
 
       <div className="flex gap-1 border-b border-border overflow-x-auto">
@@ -313,6 +350,13 @@ export default function TargetDetail() {
         {tab === "hosts" && <LiveHostList data={data.hosts} targetId={id} />}
         {tab === "vulns" && <VulnerabilityList data={data.vulns} targetId={id} />}
         {tab === "endpoints" && <EndpointList data={data.endpoints} targetId={id} />}
+        {tab === "manual" && (
+          <ManualWorkspace
+            targetId={id}
+            host={target?.target || ""}
+            onBack={() => setTab("subdomains")}
+          />
+        )}
       </div>
     </div>
   );

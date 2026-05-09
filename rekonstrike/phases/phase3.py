@@ -1,8 +1,8 @@
 """Phase 3: Web probing — HTTP probe, tech detection, screenshots"""
 from . import phase
 from ..output import out
-from ..database import LiveHost, Subdomain
-from sqlalchemy import select
+from ..repositories.target_repo import TargetRepository
+from ..repositories.host_repo import HostRepository
 
 
 @phase(3, "Web Probing",
@@ -14,13 +14,9 @@ class Phase:
     async def run(self):
         # Always query DB for resolved subdomains (Phase 2 may have updated this)
         async with await self.ctx.db.get_session() as s:
-            async with s.begin():
-                rows = await s.execute(
-                    select(Subdomain.subdomain).where(
-                        Subdomain.target_id == self.ctx.target_id,
-                    )
-                )
-                subs = {r[0] for r in rows.fetchall()}
+            repo = TargetRepository(s)
+            items, _ = await repo.get_subdomains(self.ctx.target_id, size=10000)
+            subs = {r.subdomain for r in items}
 
         if not subs:
             out.warning("No subdomains to probe")
@@ -39,41 +35,47 @@ class Phase:
         result = await httpx.probe(input_data)
         hosts = result.json_lines()
 
-        async with await self.ctx.db.get_session() as s:
-            async with s.begin():
-                existing_rows = await s.execute(
-                    select(LiveHost.url).where(LiveHost.url.isnot(None))
-                )
-                existing_urls = {r[0] for r in existing_rows.fetchall()}
-
-                rows = []
-                for host in hosts:
+        # WAF detection on 200/403 hosts
+        from ..tools.wrappers import WafW00f
+        waf = WafW00f(self.ctx.runner)
+        if waf.is_available:
+            for host in hosts:
+                sc = host.get("status_code")
+                if sc in (200, 403):
                     url = host.get("url", "")
-                    if not url or url in existing_urls:
-                        continue
-                    rows.append({
-                        "url": url,
-                        "status_code": host.get("status_code"),
-                        "title": host.get("title", ""),
-                        "technologies": host.get("tech", []),
-                        "content_length": host.get("content_length"),
-                        "web_server": host.get("webserver", ""),
-                        "response_headers": host.get("response_headers", {}),
-                    })
+                    if url:
+                        wafs = await waf.detect(url)
+                        if wafs:
+                            host["waf_detected"] = wafs
+                            existing = host.get("response_headers") or {}
+                            existing.setdefault("waf", wafs)
+                            host["response_headers"] = existing
 
-                if rows:
-                    from sqlalchemy import insert
-                    stmt = insert(LiveHost)
-                    if self.ctx.settings.db_type == "postgresql":
-                        stmt = stmt.on_conflict_do_nothing(
-                            index_elements=["url"]
-                        )
-                    else:
-                        stmt = stmt.prefix_with("OR IGNORE")
-                    await s.execute(stmt.values(rows))
+        from ..database import normalize_host
+        rows = []
+        for host in hosts:
+            raw_url = host.get("url", "")
+            if not raw_url:
+                continue
+            url = normalize_host(raw_url)
+            rows.append({
+                "url": url,
+                "raw_url": raw_url,
+                "status_code": host.get("status_code"),
+                "title": host.get("title", ""),
+                "technologies": host.get("tech", []),
+                "content_length": host.get("content_length"),
+                "web_server": host.get("webserver", ""),
+                "response_headers": host.get("response_headers", {}),
+            })
+
+        if rows:
+            async with await self.ctx.db.get_session() as s:
+                async with s.begin():
+                    repo = HostRepository(s, db_type=self.ctx.settings.db_type)
+                    await repo.add_live_hosts(rows)
 
         live_count = len(rows)
-
         urls = sorted({h.get("url", "") for h in hosts if h.get("url")})
         self.ctx.live_hosts = hosts
         out.result("Live Web Servers", urls)

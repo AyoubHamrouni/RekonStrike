@@ -12,6 +12,7 @@ from .database import Database
 from .engine import Pipeline
 from .phases import get_registered_phases
 from .output import out
+from .wordlists import ensure_wordlists
 
 app = typer.Typer(
     name="rekonstrike",
@@ -50,6 +51,7 @@ def scan(
 
     async def _run():
         await db.create_all()
+        await ensure_wordlists(settings.data_dir)
         pipeline = Pipeline(settings, db)
         await pipeline.run(target, target_type, phases=phase_nums)
         await db.close()
@@ -158,6 +160,7 @@ def install():
         "katana": "github.com/projectdiscovery/katana",
         "ffuf": "github.com/ffuf/ffuf",
         "cewl": "gem install cewl",
+        "trufflehog": "github.com/trufflesecurity/trufflehog",
     }
 
     import shutil

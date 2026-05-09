@@ -1,9 +1,8 @@
 """Intelligent ROI scoring — prioritizes assets most likely to contain bugs"""
-import json
 
 
 class Scorer:
-    """Returns (score: int, signals: list[str]) for a host dict."""
+    """Returns (score: int, signals: list[str]) for a host dict and optional program dict."""
 
     TITLE_SIGNALS = {
         "admin": 35, "login": 30, "dashboard": 30, "api": 20, "portal": 25,
@@ -29,10 +28,11 @@ class Scorer:
     STATUS_WEIGHTS = {200: 10, 301: 5, 302: 5, 401: 20, 403: 25, 404: 5, 500: 30, 502: 20, 503: 15}
 
     @classmethod
-    def score(cls, host: dict) -> tuple[int, list[str]]:
+    def score(cls, host: dict, program: dict | None = None) -> tuple[int, list[str]]:
         score = 50  # baseline
         signals: list[str] = []
 
+        # ── Title signals ─────────────────────────────────────────────────
         title = (host.get("title") or "").lower()
         for kw, pts in cls.TITLE_SIGNALS.items():
             if kw in title:
@@ -40,8 +40,10 @@ class Scorer:
                 signals.append(f"title:{kw}(+{pts})")
                 break
 
+        # ── Technology signals ────────────────────────────────────────────
         techs_raw = host.get("technologies")
         if isinstance(techs_raw, str):
+            import json
             try:
                 techs_raw = json.loads(techs_raw)
             except json.JSONDecodeError:
@@ -52,11 +54,13 @@ class Scorer:
                 score += pts
                 signals.append(f"tech:{tech}({pts:+d})")
 
+        # ── Status code signals ───────────────────────────────────────────
         status = host.get("status_code") or 0
         if pts := cls.STATUS_WEIGHTS.get(status):
             score += pts
             signals.append(f"status:{status}(+{pts})")
 
+        # ── Response header signals ───────────────────────────────────────
         headers = host.get("response_headers") or {}
         if "Content-Security-Policy" not in headers:
             score += 10
@@ -65,6 +69,7 @@ class Scorer:
             score += 5
             signals.append("missing_hsts(+5)")
 
+        # ── SSL signals ──────────────────────────────────────────────────
         ssl = host.get("ssl_info") or {}
         if ssl.get("expired") or (ssl.get("valid") is False):
             score += 30
@@ -77,12 +82,47 @@ class Scorer:
             signals.append("deprecated_tls(+25)")
         if ssl.get("error"):
             score += 10
-            signals.append(f"ssl_error(+10)")
+            signals.append("ssl_error(+10)")
 
+        # ── Endpoint count signals ────────────────────────────────────────
         ep_count = host.get("endpoint_count") or 0
         ep_pts = min(ep_count * 2, 30)
         if ep_pts > 0:
             score += ep_pts
             signals.append(f"endpoints({ep_count})(+{ep_pts})")
+
+        # ── WAF penalty ──────────────────────────────────────────────────
+        wafs = host.get("waf_detected") or []
+        if wafs:
+            penalty = min(len(wafs) * 20, 40)
+            score -= penalty
+            signals.append(f"waf_detected({','.join(wafs)})(-{penalty})")
+
+        # ── Program bounty boost ─────────────────────────────────────────
+        if program:
+            bounty_max = program.get("bounty_max")
+            if bounty_max is not None:
+                if bounty_max >= 10000:
+                    score += 40
+                    signals.append(f"program_bounty({bounty_max})(+40)")
+                elif bounty_max >= 5000:
+                    score += 25
+                    signals.append(f"program_bounty({bounty_max})(+25)")
+                elif bounty_max >= 1000:
+                    score += 10
+                    signals.append(f"program_bounty({bounty_max})(+10)")
+
+        # ── Takeover boost ───────────────────────────────────────────────
+        takeovers = host.get("takeover_findings") or []
+        if takeovers:
+            score += 100
+            signals.append("takeover_detected(+100)")
+
+        # ── Secret boost ─────────────────────────────────────────────────
+        secrets = host.get("secret_findings") or []
+        if secrets:
+            secret_pts = min(len(secrets) * 60, 120)
+            score += secret_pts
+            signals.append(f"secrets_found({len(secrets)})(+{secret_pts})")
 
         return min(score, 999), signals

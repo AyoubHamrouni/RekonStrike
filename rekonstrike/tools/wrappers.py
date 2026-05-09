@@ -268,3 +268,37 @@ class CeWL(BaseTool):
         return await self.execute([
             url, "-d", str(depth), "-m", str(min_word_length), "-c", "--with-numbers",
         ])
+
+
+class TrufflehogWrapper(BaseTool):
+    name = "trufflehog"
+    binary = "trufflehog"
+
+    async def scan_file(self, file_path: str) -> "ToolResult":
+        return await self.execute(["filesystem", file_path, "--json", "--no-update"])
+
+    async def scan_url(self, url: str) -> "ToolResult":
+        return await self.execute(["git", url, "--json", "--no-update"])
+
+    @property
+    def is_available(self) -> bool:
+        return self.runner.is_available("trufflehog")
+
+
+class WafW00f(BaseTool):
+    name = "wafw00f"
+    binary = "wafw00f"
+
+    async def detect(self, url: str) -> list[str]:
+        if not self.is_available:
+            return []
+        result = await self.execute([url, "-a", "-o", "-", "--format=json"])
+        for line in result.lines():
+            import json
+            try:
+                data = json.loads(line)
+                if isinstance(data, dict):
+                    return data.get("waf", [])
+            except json.JSONDecodeError:
+                continue
+        return []

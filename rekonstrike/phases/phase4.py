@@ -1,5 +1,6 @@
 """Phase 4: Content discovery — crawling, JS analysis, parameter mining"""
 import asyncio
+from pathlib import Path
 from . import phase
 from ..output import out
 
@@ -40,9 +41,20 @@ class Phase:
 
         # ── ffuf ────────────────────────────────────────────────────────
         ff = Ffuf(self.ctx.runner)
-        wordlist = self.ctx.settings.wordlist_dir + "/common.txt"
-        if ff.is_available:
-            tasks.append(self._run_ffuf(ff, targets[:5], wordlist))
+        wordlists = self.ctx.wordlists
+        common_wl = wordlists.get("common")
+        if common_wl and not Path(common_wl).exists():
+            out.warning("common.txt wordlist missing, skipping ffuf content fuzz")
+            common_wl = None
+        api_wl = wordlists.get("api")
+        if api_wl and not Path(api_wl).exists():
+            out.warning("api-endpoints.txt wordlist missing, skipping ffuf api fuzz")
+            api_wl = None
+
+        if ff.is_available and common_wl:
+            tasks.append(self._run_ffuf(ff, targets[:5], str(common_wl)))
+        if ff.is_available and api_wl:
+            tasks.append(self._run_ffuf_api(ff, targets[:5], str(api_wl)))
 
         # ── CeWL ────────────────────────────────────────────────────────
         cw = CeWL(self.ctx.runner)
@@ -117,6 +129,19 @@ class Phase:
             except Exception as e:
                 out.warning(f"ffuf {url}: {e}")
         out.success(f"ffuf: {len(discovered)} endpoints")
+        return discovered
+
+    async def _run_ffuf_api(self, tool, targets: list[str], wordlist: str) -> set[str]:
+        discovered: set[str] = set()
+        for url in targets:
+            try:
+                r = await tool.fuzz(url.rstrip("/") + "/api/FUZZ", wordlist)
+                for line in r.lines():
+                    if line.startswith("http"):
+                        discovered.add(line)
+            except Exception as e:
+                out.warning(f"ffuf api {url}: {e}")
+        out.success(f"ffuf api: {len(discovered)} endpoints")
         return discovered
 
     async def _run_cewl(self, tool, targets: list[str]) -> set[str]:

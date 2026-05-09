@@ -1,0 +1,91 @@
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
+from ..deps import verify_auth, get_db, get_tm, settings
+from ..manager import manager
+from ...services.scan_service import ScanService
+from ...repositories.session_repo import SessionRepository
+from ...phases import get_registered_phases
+import asyncio
+
+router = APIRouter(prefix="/scan", tags=["scans"])
+
+class ScanRequest(BaseModel):
+    target: str
+    target_type: str = "wildcard"
+    phases: Optional[list[int]] = None
+
+@router.get("/phases")
+async def list_phases(auth: bool = Depends(verify_auth)):
+    return get_registered_phases()
+
+@router.post("")
+async def start_scan(req: ScanRequest, auth: bool = Depends(verify_auth), 
+                     db=Depends(get_db), tm=Depends(get_tm)):
+    
+    session_id_wrap = [None]
+    async def on_event(event: str, data: dict):
+        if session_id_wrap[0]:
+             await manager.broadcast(session_id_wrap[0], event, data)
+
+    service = ScanService(settings, db, tm)
+    session_id = await service.start_scan(
+        req.target, req.target_type, req.phases, on_event=on_event
+    )
+    session_id_wrap[0] = session_id
+    
+    return {
+        "message": "Scan initiated",
+        "target": req.target,
+        "target_type": req.target_type,
+        "session_id": session_id,
+    }
+
+@router.post("/{session_id}/cancel")
+async def cancel_scan(session_id: int, auth: bool = Depends(verify_auth),
+                      db=Depends(get_db), tm=Depends(get_tm)):
+    service = ScanService(settings, db, tm)
+    if await service.cancel_scan(session_id):
+        await manager.broadcast(session_id, "scan_cancelled", {})
+        return {"message": "Scan cancelled", "session_id": session_id}
+    return {"message": "No active scan found", "session_id": session_id}
+
+@router.websocket("/ws/{session_id}")
+async def ws_scan(ws: WebSocket, session_id: int):
+    await manager.connect(session_id, ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(session_id, ws)
+
+@router.get("/sessions")
+async def list_sessions(limit: int = 50, auth: bool = Depends(verify_auth), db=Depends(get_db)):
+    async with await db.get_session() as s:
+        repo = SessionRepository(s)
+        sessions = await repo.list_sessions(limit)
+        return [
+            {
+                "id": r.id, "target_id": r.target_id, "workflow": r.workflow,
+                "status": r.status, "current_phase": r.current_phase,
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "ended_at": r.ended_at.isoformat() if r.ended_at else None,
+            }
+            for r in sessions
+        ]
+
+@router.get("/sessions/{session_id}")
+async def get_session(session_id: int, auth: bool = Depends(verify_auth), db=Depends(get_db)):
+    async with await db.get_session() as s:
+        repo = SessionRepository(s)
+        r = await repo.get_session(session_id)
+        if not r:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return {
+            "id": r.id, "target_id": r.target_id, "workflow": r.workflow,
+            "status": r.status, "current_phase": r.current_phase,
+            "started_at": r.started_at.isoformat() if r.started_at else None,
+            "ended_at": r.ended_at.isoformat() if r.ended_at else None,
+            "error_message": r.error_message,
+            "stats": r.stats,
+        }

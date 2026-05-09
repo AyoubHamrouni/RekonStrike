@@ -37,6 +37,58 @@ export async function fetchStats(targetId) {
   return req(`/targets/${targetId}/stats`);
 }
 
+export async function fetchProgramScope(targetId) {
+  return req(`/targets/${targetId}/program`);
+}
+
+export async function aiTriage(targetId, body = {}) {
+  return req(`/targets/${targetId}/ai/triage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function aiSurface(targetId, body = {}) {
+  return req(`/targets/${targetId}/ai/surface`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function aiFpFilter(targetId, body = {}) {
+  return req(`/targets/${targetId}/ai/fp-filter`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function aiReport(targetId, body) {
+  return req(`/targets/${targetId}/ai/report`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function aiScope(targetId, body = {}) {
+  return req(`/targets/${targetId}/ai/scope`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function aiAdvisor(targetId, body) {
+  return req(`/targets/${targetId}/ai/advisor`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export async function fetchPhases() {
   return req("/phases");
 }
@@ -59,6 +111,16 @@ export async function fetchSession(sessionId) {
 
 export async function fetchHealth() {
   return req("/health");
+}
+
+export async function fetchSecrets(targetId, params = {}) {
+  const q = new URLSearchParams(params).toString();
+  return req(`/targets/${targetId}/secrets${q ? `?${q}` : ""}`);
+}
+
+export async function fetchTakeovers(targetId, params = {}) {
+  const q = new URLSearchParams(params).toString();
+  return req(`/targets/${targetId}/takeovers${q ? `?${q}` : ""}`);
 }
 
 export function connectWs(sessionId, onEvent) {
