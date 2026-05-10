@@ -136,3 +136,47 @@ export function connectWs(sessionId, onEvent) {
   ws.onclose = () => {};
   return ws;
 }
+
+// ── Agent API ──────────────────────────────────────────────────────────────
+
+export async function startAgentSession(targetId, body = {}) {
+  return req(`/targets/${targetId}/agent/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function fetchAgentState(targetId, sessionId) {
+  return req(`/targets/${targetId}/agent/${sessionId}/state`);
+}
+
+export async function sendAgentFeedback(targetId, sessionId, body = {}) {
+  return req(`/targets/${targetId}/agent/${sessionId}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export function connectAgentSSE(targetId, sessionId, onEvent, onError) {
+  const base = import.meta.env.VITE_API_URL || "";
+  const url = `${base}/targets/${targetId}/agent/${sessionId}/stream`;
+  const source = new EventSource(url);
+
+  const events = ["session", "guidance", "strategy", "phase", "state", "interrupt", "complete", "heartbeat", "feedback"];
+  events.forEach((evt) => {
+    source.addEventListener(evt, (e) => {
+      try {
+        onEvent(evt, JSON.parse(e.data));
+      } catch {}
+    });
+  });
+
+  source.onerror = () => {
+    onError?.();
+    source.close();
+  };
+
+  return source;
+}

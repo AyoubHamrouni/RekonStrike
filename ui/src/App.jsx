@@ -3,16 +3,18 @@ import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "re
 import { Toaster, toast } from "react-hot-toast";
 import {
   LayoutDashboard, Crosshair, Activity, Target, Shield,
-  Menu, X, ChevronRight,
+  Menu, X, ChevronRight, Bot,
 } from "lucide-react";
 import Dashboard from "./components/Dashboard";
 import NewScan from "./components/NewScan";
 import TargetDetail from "./components/TargetDetail";
 import ScanProgress from "./components/ScanProgress";
+import AgentDashboard from "./components/AgentDashboard";
 import { fetchHealth } from "./api";
 
 const navItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
+  { path: "/agent", label: "Agent", icon: Bot },
   { path: "/new", label: "New Scan", icon: Crosshair },
 ];
 
@@ -114,6 +116,8 @@ function AppShell() {
             <Route path="/new" element={<NewScan />} />
             <Route path="/target/:id" element={<TargetDetail />} />
             <Route path="/scan/:sessionId" element={<ScanProgress />} />
+            <Route path="/agent" element={<AgentDashboard />} />
+            <Route path="/agent/:targetId" element={<AgentDashboard />} />
           </Routes>
         </main>
       </div>

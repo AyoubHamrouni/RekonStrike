@@ -58,8 +58,30 @@ server {
     location /health { proxy_pass http://api:8000; }
     location /phases { proxy_pass http://api:8000; }
     location /scan { proxy_pass http://api:8000; }
-    location /targets { proxy_pass http://api:8000; }
     location /sessions { proxy_pass http://api:8000; }
+
+    location /targets {
+        proxy_pass http://api:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # SSE streaming — no buffering
+    location ~ ^/targets/[^/]+/agent/[^/]+/stream {
+        proxy_pass http://api:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_set_header Connection '';
+        chunked_transfer_encoding on;
+    }
 
     location /ws/ {
         proxy_pass http://api:8000/ws/;

@@ -1,6 +1,4 @@
-#!/usr/bin/env python3
-"""RekonStrike — python -m rekonstrike entry point"""
+import uvicorn
 
-from rekonstrike.cli import main
-
-main()
+if __name__ == "__main__":
+    uvicorn.run("rekonstrike.api.server:app", host="0.0.0.0", port=8000, reload=True)

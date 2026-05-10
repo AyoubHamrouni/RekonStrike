@@ -19,7 +19,7 @@ async def scan_task(
     from ..engine import Pipeline
 
     settings = Settings(**ctx.get("settings", {}))
-    db = Database(settings)
+    db = Database(settings.database_url)
     await db.create_all()
 
     pipeline = Pipeline(settings, db)
@@ -124,7 +124,7 @@ class TaskManager:
         from ..engine import Pipeline
 
         settings = Settings(**settings_dict)
-        db = Database(settings)
+        db = Database(settings.database_url)
         # In _run_direct, the Pipeline already uses repositories
         await db.create_all()
 

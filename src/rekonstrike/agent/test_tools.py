@@ -6,7 +6,8 @@ from rekonstrike.agent.tools import PassiveReconTool, HttpProbeTool
 from rekonstrike.agent.tool_registry import ToolRegistry
 
 @pytest.mark.asyncio
-async def test_passive_recon_valid_target():
+@patch("rekonstrike.agent.tools._run_subfinder", return_value=None)
+async def test_passive_recon_valid_target(mock_subfinder):
     tool = PassiveReconTool()
     result = await tool.execute(target="example.com")
     assert result["success"] is True
@@ -20,12 +21,14 @@ async def test_passive_recon_invalid_target():
     assert is_valid is False
 
 @pytest.mark.asyncio
-async def test_http_probe_with_scope():
+@patch("rekonstrike.agent.tools._run_httpx", return_value=None)
+async def test_http_probe_with_scope(mock_httpx):
     tool = HttpProbeTool()
-    result = await tool.execute(
-        targets=["http://api.example.com", "http://admin.example.com"],
-        scope_filter={"in_scope": ["api.example.com"], "out_of_scope": ["admin.example.com"]}
-    )
+    with patch("rekonstrike.agent.tools.random.random", return_value=0.5):
+        result = await tool.execute(
+            targets=["http://api.example.com", "http://admin.example.com"],
+            scope_filter={"in_scope": ["api.example.com"], "out_of_scope": ["admin.example.com"]}
+        )
     assert result["success"] is True
     assert result["data"]["filtered_out"] == 1
     for p in result["data"]["probed"]:
@@ -35,11 +38,15 @@ async def test_http_probe_with_scope():
 async def test_registry_list_tools():
     registry = ToolRegistry()
     tools = registry.list_tools()
-    assert len(tools) == 2
+    assert len(tools) == 4
     assert tools[0]["name"] == "passive_recon"
+    assert tools[1]["name"] == "http_probe"
+    assert tools[2]["name"] == "content_discovery"
+    assert tools[3]["name"] == "vuln_scan"
 
 @pytest.mark.asyncio
-async def test_registry_call_tool_valid():
+@patch("rekonstrike.agent.tools._run_subfinder", return_value=None)
+async def test_registry_call_tool_valid(mock_subfinder):
     registry = ToolRegistry()
     result = await registry.call_tool("passive_recon", target="example.com")
     assert result["success"] is True

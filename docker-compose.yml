@@ -1,14 +1,17 @@
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
     container_name: rekonstrike-api
     ports:
       - "8000:8000"
     environment:
-      RS_DB_TYPE: postgresql
-      RS_DB_URL: postgresql+asyncpg://postgres:postgres@db:5432/rekonstrike
-      RS_REDIS_URL: redis://redis:6379/0
-      RS_TOOL_MODE: docker
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/rekonstrike
+      TOOL_MODE: docker
+      TOOL_CONCURRENCY: "5"
+      TOOL_TIMEOUT: "300"
     volumes:
       - ./data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock
@@ -17,6 +20,20 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    restart: unless-stopped
+    networks:
+      - rekonstrike
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ui
+    container_name: rekonstrike-ui
+    ports:
+      - "80:80"
+    depends_on:
+      - api
     restart: unless-stopped
     networks:
       - rekonstrike
@@ -45,6 +62,113 @@ services:
     restart: unless-stopped
     networks:
       - rekonstrike
+
+  # ── Tool containers (build only via --profile tools) ─────────────────────
+  subfinder:
+    profiles: ["tools"]
+    build:
+      context: docker/tools
+      dockerfile: Dockerfile
+      args:
+        TOOL: subfinder
+    image: rekonstrike/subfinder:latest
+
+  httpx:
+    profiles: ["tools"]
+    build:
+      context: docker/tools
+      dockerfile: Dockerfile
+      args:
+        TOOL: httpx
+    image: rekonstrike/httpx:latest
+
+  nuclei:
+    profiles: ["tools"]
+    build:
+      context: docker/tools
+      dockerfile: Dockerfile
+      args:
+        TOOL: nuclei
+    image: rekonstrike/nuclei:latest
+
+  katana:
+    profiles: ["tools"]
+    build:
+      context: docker/tools
+      dockerfile: Dockerfile
+      args:
+        TOOL: katana
+    image: rekonstrike/katana:latest
+
+  gau:
+    profiles: ["tools"]
+    build:
+      context: docker/tools
+      dockerfile: Dockerfile
+      args:
+        TOOL: gau
+    image: rekonstrike/gau:latest
+
+  shuffledns:
+    profiles: ["tools"]
+    build:
+      context: docker/tools
+      dockerfile: Dockerfile
+      args:
+        TOOL: shuffledns
+    image: rekonstrike/shuffledns:latest
+
+  dnsx:
+    profiles: ["tools"]
+    build:
+      context: docker/tools
+      dockerfile: Dockerfile
+      args:
+        TOOL: dnsx
+    image: rekonstrike/dnsx:latest
+
+  amass:
+    profiles: ["tools"]
+    build:
+      context: docker/tools
+      dockerfile: Dockerfile
+      args:
+        TOOL: amass
+    image: rekonstrike/amass:latest
+
+  naabu:
+    profiles: ["tools"]
+    build:
+      context: docker/tools
+      dockerfile: Dockerfile
+      args:
+        TOOL: naabu
+    image: rekonstrike/naabu:latest
+
+  gospider:
+    profiles: ["tools"]
+    build:
+      context: docker/tools
+      dockerfile: Dockerfile
+      args:
+        TOOL: gospider
+    image: rekonstrike/gospider:latest
+
+  ffuf:
+    profiles: ["tools"]
+    build:
+      context: docker/tools
+      dockerfile: Dockerfile
+      args:
+        TOOL: ffuf
+    image: rekonstrike/ffuf:latest
+
+  cloud_enum:
+    profiles: ["tools"]
+    build:
+      context: docker/tools
+      dockerfile: Dockerfile.cloud_enum
+    image: rekonstrike/cloud_enum:latest
 
 volumes:
   pgdata:

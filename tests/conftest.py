@@ -1,37 +1,33 @@
 """Test fixtures and configuration."""
-import asyncio
-import tempfile
-from pathlib import Path
+import os
 from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rekonstrike.config import Settings, load_settings
-from rekonstrike.database import Database, Base
+from rekonstrike.config import Settings
+from rekonstrike.database import Database
 from rekonstrike.scope import Scope
 from rekonstrike.scoring import Scorer
-from rekonstrike.engine import PhaseContext
 from rekonstrike.runner import ToolRunner
 
 
-@pytest.fixture
-def temp_db() -> str:
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
-        db_path = f.name
-    yield db_path
-    Path(db_path).unlink(missing_ok=True)
+def _test_db_url() -> str:
+    return os.environ.get(
+        "TEST_DATABASE_URL",
+        "postgresql+asyncpg://vulnbank:vulnbank_password@localhost:5432/rekonstrike_test",
+    )
 
 
 @pytest.fixture
-def settings(temp_db: str) -> Settings:
-    return Settings(db_type="sqlite", db_path=temp_db)
+def settings() -> Settings:
+    return Settings(database_url=_test_db_url())
 
 
 @pytest_asyncio.fixture
 async def db(settings: Settings) -> AsyncGenerator[Database, None]:
-    database = Database(settings)
+    database = Database(settings.database_url)
     await database.create_all()
     yield database
     await database.close()
@@ -39,7 +35,7 @@ async def db(settings: Settings) -> AsyncGenerator[Database, None]:
 
 @pytest_asyncio.fixture
 async def session(db: Database) -> AsyncGenerator[AsyncSession, None]:
-    async with await db.get_session() as s:
+    async with db.get_session() as s:
         yield s
 
 

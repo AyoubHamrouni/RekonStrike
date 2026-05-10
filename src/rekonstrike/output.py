@@ -3,10 +3,7 @@
 from rich.console import Console as RichConsole
 from rich.table import Table
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskID
-from rich.syntax import Syntax
 from rich import box
-from datetime import datetime
 
 _console = RichConsole()
 

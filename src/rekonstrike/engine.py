@@ -88,7 +88,7 @@ class Pipeline:
         scope = Scope.from_target(target, target_type)
         runner = ToolRunner(self.settings)
 
-        async with await self.db.get_session() as session:
+        async with self.db.get_session() as session:
             target_repo = TargetRepository(session)
             session_repo = SessionRepository(session)
 

@@ -11,7 +11,7 @@ from ..repositories.host_repo import HostRepository
 from ..services.scan_service import ScanService
 
 settings = load_settings()
-db = Database(settings)
+db = Database(settings.database_url)
 
 security = HTTPBearer(auto_error=False)
 
@@ -27,7 +27,7 @@ async def verify_auth(
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    async with await db.get_session() as session:
+    async with db.get_session() as session:
         yield session
 
 
@@ -44,11 +44,11 @@ def get_session_repo(
 
 
 def get_host_repo(session: AsyncSession = Depends(get_db_session)) -> HostRepository:
-    return HostRepository(session, db_type=settings.db_type)
+    return HostRepository(session)
 
 
 def get_tm():
-    return get_task_manager(settings.redis_url, settings.model_dump(mode="json"))
+    return get_task_manager(settings.redis_url)
 
 
 def get_scan_service(

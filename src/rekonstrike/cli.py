@@ -1,4 +1,4 @@
-"""RekonStrike CLI — built with Typer for fast, intuitive command-line operation"""
+"""RekonStrike CLI — admin tasks only (setup, config, health). Recon work lives in the Web UI."""
 
 import asyncio
 import sys
@@ -10,10 +10,7 @@ import typer
 from . import __version__
 from .config import load_settings
 from .database import Database
-from .engine import Pipeline
-from .phases import get_registered_phases
 from .output import out
-from .wordlists import ensure_wordlists
 
 app = typer.Typer(
     name="rekonstrike",
@@ -28,72 +25,20 @@ def _main():
 
 
 @app.command()
-def scan(
-    target: str = typer.Argument(..., help="Target domain, company name, or URL"),
-    target_type: str = typer.Option(
-        "wildcard", "-t", "--type", help="Target type: wildcard, domain, company, url"
-    ),
-    phases: str = typer.Option(
-        None, "-p", "--phases", help="Phases to run (comma-separated, e.g. 0,1,2)"
-    ),
-    config: Optional[Path] = typer.Option(
-        None, "-c", "--config", help="Path to config YAML file"
-    ),
-    verbose: bool = typer.Option(False, "-v", "--verbose", help="Verbose output"),
-):
-    """Run reconnaissance scan against a target.
-
-    Examples:
-      rekonstrike scan example.com                     # Full wildcard scan
-      rekonstrike scan example.com -t domain -p 0,1,2  # Passive recon only
-      rekonstrike scan "Acme Inc" -t company            # Company-level recon
-      rekonstrike scan https://example.com/api -t url   # URL-specific scan
-    """
-    phase_nums = [int(x.strip()) for x in phases.split(",")] if phases else None
-    settings = load_settings(str(config) if config else None)
-    db = Database(settings)
-
-    async def _run():
-        await db.create_all()
-        await ensure_wordlists(settings.data_dir)
-        pipeline = Pipeline(settings, db)
-        await pipeline.run(target, target_type, phases=phase_nums)
-        await db.close()
-
-    try:
-        asyncio.run(_run())
-    except KeyboardInterrupt:
-        out.warning("\nScan interrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        out.error(f"Scan failed: {e}")
-        if verbose:
-            import traceback
-
-            traceback.print_exc()
-        sys.exit(1)
-
-
-@app.command()
 def config(
     show: bool = typer.Option(False, "--show", help="Show current configuration"),
     set_key: Optional[str] = typer.Option(
-        None, "--set", help="Set config key (e.g. api_keys.shodan)"
+        None, "--set", help="Set config key (e.g. anthropic_api_key)"
     ),
     set_value: Optional[str] = typer.Option(None, "--value", help="Value for --set"),
-    config_path: Optional[Path] = typer.Option(
-        None, "-c", "--config", help="Path to config file"
-    ),
 ):
     """View or modify configuration."""
-    import yaml
-
-    settings = load_settings(str(config_path) if config_path else None)
+    settings = load_settings()
 
     if show:
         out.banner()
         out.info("Current Configuration")
-        print(yaml.dump(settings.model_dump(mode="json"), default_flow_style=False))
+        print(settings.model_dump_json(indent=2))
         return
 
     if set_key and set_value:
@@ -104,48 +49,23 @@ def config(
             d = d.setdefault(k, {})
         d[keys[-1]] = set_value
 
-        yaml_path = config_path or Path("config.yaml")
-        yaml_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(yaml_path, "w") as f:
-            yaml.dump(data, f, default_flow_style=False)
+        env_path = Path(".env")
+        env_vars = {}
+        if env_path.exists():
+            for line in env_path.read_text().splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    env_vars[k.strip()] = v.strip()
+
+        env_key = set_key.upper()
+        env_vars[env_key] = str(set_value)
+        lines = [f"{k}={v}" for k, v in env_vars.items()]
+        env_path.write_text("\n".join(lines) + "\n")
         out.success(f"Set {set_key} = {set_value}")
         return
 
     out.info("Use --show to view or --set KEY --value VAL to update")
-
-
-@app.command()
-def worker(
-    config_path: Optional[Path] = typer.Option(
-        None, "-c", "--config", help="Path to config YAML file"
-    ),
-):
-    """Start the ARQ background worker for processing scan jobs."""
-    settings = load_settings(str(config_path) if config_path else None)
-    out.info(f"Starting ARQ worker (Redis: {settings.redis_url})")
-    out.info("Press Ctrl+C to stop")
-
-    from arq import create_pool
-    from arq.worker import Worker as ArqWorker
-
-    async def _run():
-        redis = await create_pool(settings.redis_url)
-        worker = ArqWorker(
-            redis_pool=redis,
-            functions=["rekonstrike.tasks:scan_task"],
-            burst=False,
-            poll_delay=1.0,
-            max_burst_jobs=1,
-        )
-        try:
-            await worker.run()
-        finally:
-            await redis.close()
-
-    try:
-        asyncio.run(_run())
-    except KeyboardInterrupt:
-        out.warning("\nWorker stopped")
 
 
 @app.command()
@@ -188,28 +108,6 @@ def install():
 
 
 @app.command()
-def phases():
-    """List all registered pipeline phases."""
-    out.banner()
-    out.info("RekonStrike Pipeline — 7 Phases")
-    print()
-    phase_details = {
-        0: "Validates the target to ensure it's well-formed before investing compute time.",
-        1: "Passive OSINT — finds subdomains from certificate logs, search engines, GitHub without touching the target. Best phase to start learning recon fundamentals.",
-        2: "Active probing — resolves DNS, scans ports, checks cloud assets. Separates real infrastructure from stale DNS records.",
-        3: "HTTP probing — detects web servers, technology stacks, SSL certs, response headers. Tells you what each host is running.",
-        4: "Content discovery — crawls websites, fuzzes for hidden paths, fetches historical URLs. Finds admin panels, API docs, backup files.",
-        5: "Vulnerability scanning — runs 10,000+ Nuclei templates. Automatically finds CVEs, misconfigurations, and exposures.",
-        6: "ROI scoring — prioritizes findings so you know which hosts to investigate first. Focus on high-value targets.",
-    }
-    for p in get_registered_phases():
-        out.stat(f"Phase {p['number']}", f"{p['name']}")
-        detail = phase_details.get(p["number"], p["description"])
-        print(f"  {detail}")
-        print()
-
-
-@app.command()
 def version():
     """Show version information."""
     print(f"RekonStrike v{__version__}")
@@ -221,24 +119,13 @@ def serve(
     host: str = typer.Option("0.0.0.0", "--host", help="Host to bind"),
     port: int = typer.Option(8000, "--port", help="Port to bind"),
     reload: bool = typer.Option(False, "--reload", help="Enable auto-reload"),
-    config_path: Optional[Path] = typer.Option(
-        None, "-c", "--config", help="Path to config YAML file"
-    ),
 ):
     """Start the unified Web UI and API server."""
     import uvicorn
-    from .config import load_settings
 
-    settings = load_settings(str(config_path) if config_path else None)
-    
     out.banner()
     out.info(f"Starting RekonStrike Unified Server on http://{host}:{port}")
     out.info("AI Agents: Initializing...")
-    
-    # Set environment variables for the uvicorn process
-    if config_path:
-        import os
-        os.environ["RS_CONFIG"] = str(config_path)
 
     uvicorn.run(
         "rekonstrike.api.server:app",
@@ -247,6 +134,58 @@ def serve(
         reload=reload,
         log_level="info",
     )
+
+
+@app.command()
+def health():
+    """Check service status."""
+    settings = load_settings()
+
+    out.banner()
+    out.info("Checking service health...")
+
+    # DB connectivity check
+    db = Database(settings.database_url)
+    try:
+
+        async def _check():
+            try:
+                await db.create_all()
+                out.success("Database: connected")
+            except Exception as e:
+                out.error(f"Database: {e}")
+
+        asyncio.run(_check())
+    finally:
+        asyncio.run(db.close())
+
+    # LLM providers
+    providers = settings.configured_providers
+    if providers:
+        out.success(f"LLM providers: {', '.join(providers)}")
+    else:
+        out.warning("LLM providers: none configured")
+
+    out.success(f"Version: {__version__}")
+    out.success("Status: healthy")
+
+
+@app.command()
+def db(
+    action: str = typer.Argument(
+        "migrate", help="Action: migrate (run pending migrations)"
+    ),
+):
+    """Run database migrations."""
+    if action == "migrate":
+        from alembic.config import Config
+        from alembic import command
+
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        out.success("Database migrations complete")
+    else:
+        out.error(f"Unknown action: {action}. Use 'migrate'.")
 
 
 def main():

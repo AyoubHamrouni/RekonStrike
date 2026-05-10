@@ -39,7 +39,7 @@ class PlatformManager:
         if not scope:
             return None
 
-        async with await db.get_session() as s:
+        async with db.get_session() as s:
             async with s.begin():
                 existing = await s.execute(
                     select(ProgramScope).where(ProgramScope.target_id == target_id)

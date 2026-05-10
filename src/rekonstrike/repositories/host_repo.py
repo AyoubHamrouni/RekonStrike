@@ -1,30 +1,23 @@
 from typing import Optional, Sequence, Any
-from sqlalchemy import select, func, insert
+from sqlalchemy import select, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from ..database import LiveHost, Endpoint, Vulnerability, Subdomain
+from ..database import LiveHost, Vulnerability, Subdomain
 
 
 class HostRepository:
-    def __init__(self, session: AsyncSession, db_type: str = "sqlite"):
+    def __init__(self, session: AsyncSession):
         self.session = session
-        self.db_type = db_type
 
     async def add_live_hosts(self, rows: list[dict[str, Any]]):
         if not rows:
             return
 
-        stmt = insert(LiveHost)
-        if self.db_type == "postgresql":
-            from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-            stmt = (
-                pg_insert(LiveHost)
-                .values(rows)
-                .on_conflict_do_nothing(index_elements=["url"])
-            )
-        else:
-            stmt = stmt.values(rows).prefix_with("OR IGNORE")
-
+        stmt = (
+            pg_insert(LiveHost)
+            .values(rows)
+            .on_conflict_do_nothing(index_elements=["url"])
+        )
         await self.session.execute(stmt)
 
     async def get_live_hosts(

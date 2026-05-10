@@ -1,99 +1,72 @@
 import logging
 import os
-from pathlib import Path
-
-from fastapi import FastAPI, Depends, Response
-from fastapi.responses import FileResponse
+import asyncio
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
-from .. import __version__
-from .deps import settings, db, get_task_manager, verify_auth
-from .routers import scans, targets, ai
-from ..wordlists import ensure_wordlists
+from rekonstrike.config import load_settings
+from rekonstrike.database import Database
+from rekonstrike.api.routers.agent import router as agent_router
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from contextlib import asynccontextmanager
-
+# Initialize components
+settings = load_settings()
+db = Database(settings.database_url)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
-    from alembic.config import Config as AlembicConfig
-    from alembic import command as alembic_cmd
-
-    ini_path = os.path.join(os.path.dirname(__file__), "..", "..", "alembic.ini")
-
-    # Run migrations
-    if os.path.exists(ini_path):
-        logger.info("Running database migrations...")
-        alembic_cfg = AlembicConfig(ini_path)
-        # Alembic is primarily sync, but since this is startup it's usually acceptable.
-        # For a truly async approach, we'd use an async migration runner, but this is the standard way.
-        alembic_cmd.upgrade(alembic_cfg, "head")
-    else:
-        logger.info("Alembic config not found, creating tables directly...")
-        await db.create_all()
-
-    tm = get_task_manager()
-    await tm.start()
-
+    # Database migration on startup
     try:
-        await ensure_wordlists(settings.data_dir)
+        from alembic.config import Config
+        from alembic import command
+        # Locate alembic.ini (assuming it's in the project root)
+        ini_path = "alembic.ini"
+        if os.path.exists(ini_path):
+            alembic_cfg = Config(ini_path)
+            # Run upgrade head in a separate thread to avoid blocking the loop
+            # and to allow env.py to use asyncio.run()
+            await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
+            logger.info("Alembic migrations completed.")
+        else:
+            logger.info("alembic.ini not found, creating tables directly.")
+            await db.create_all()
     except Exception as e:
-        logger.warning("Wordlist download failed: %s", e)
-
+        logger.error(f"Migration error: {e}. Falling back to create_all.")
+        await db.create_all()
+    
     yield
-
-    # Shutdown
-    tm = get_task_manager()
-    await tm.close()
+    
+    # Cleanup
     await db.close()
 
+app = FastAPI(title="RekonStrike Backend", lifespan=lifespan)
 
-app = FastAPI(
-    title="RekonStrike API",
-    version=__version__,
-    docs_url="/docs",
-    lifespan=lifespan,
-)
-
+# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ─── Static Files ─────────────────────────────────────────────────────────────
-
-STATIC_DIR = Path(__file__).parent.parent.parent / "ui" / "dist"
-if STATIC_DIR.exists():
-    app.mount(
-        "/assets", StaticFiles(directory=str(STATIC_DIR / "assets")), name="assets"
-    )
-
-# ─── Routers ──────────────────────────────────────────────────────────────────
-
-app.include_router(scans.router)
-app.include_router(targets.router)
-app.include_router(ai.router)
-
-
-# ─── Routes ───────────────────────────────────────────────────────────────────
-
-
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": __version__, "python": "3.14+"}
+    """Health check endpoint"""
+    return {"status": "ok"}
 
-@app.get("/{full_path:path}")
-async def serve_frontend(full_path: str):
-    index_path = STATIC_DIR / "index.html"
-    if index_path.exists():
-        # If it's an asset, the mount already handled it
-        # If it's a route (like /targets), return index.html for SPA
-        return FileResponse(index_path)
-    return {"detail": "Frontend not built. Run 'npm run build' in ui directory."}
+@app.get("/config")
+async def get_config():
+    """Returns configured providers (without keys)"""
+    return {
+        "providers": settings.configured_providers,
+        "ai_provider": settings.ai_provider,
+        "default_ai_model": settings.default_ai_model
+    }
+
+# Routers
+app.include_router(agent_router, prefix="/api/v1")

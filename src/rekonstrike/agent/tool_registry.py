@@ -3,13 +3,15 @@ import logging
 import time
 from typing import Optional
 from .tools_base import ToolBase
-from .tools import PassiveReconTool, HttpProbeTool
+from .tools import PassiveReconTool, HttpProbeTool, ContentDiscoveryTool, VulnScanTool
 
 class ToolRegistry:
     def __init__(self):
         self._tools = {}
         self.register(PassiveReconTool())
         self.register(HttpProbeTool())
+        self.register(ContentDiscoveryTool())
+        self.register(VulnScanTool())
         
     def register(self, tool: ToolBase):
         self._tools[tool.name] = tool
