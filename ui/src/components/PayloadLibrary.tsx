@@ -3,7 +3,13 @@ import { Search, Copy, ExternalLink, X, ChevronDown, ChevronRight } from "lucide
 import toast from "react-hot-toast";
 import { PAYLOADS } from "../data/payloads";
 
-const categoryLabels = {
+interface PayloadItem {
+  payload: string;
+  notes: string;
+  context: string;
+}
+
+const categoryLabels: Record<string, string> = {
   xss_reflected: "Reflected XSS",
   xss_stored: "Stored XSS",
   sqli_error: "Error-Based SQLi",
@@ -16,11 +22,17 @@ const categoryLabels = {
   open_redirect: "Open Redirect",
 };
 
-export default function PayloadLibrary({ category, targetUrl, onClose }) {
-  const [search, setSearch] = useState("");
-  const [expanded, setExpanded] = useState(null);
+interface PayloadLibraryProps {
+  category?: string;
+  targetUrl?: string;
+  onClose?: () => void;
+}
 
-  const payloads = PAYLOADS[category] || [];
+export default function PayloadLibrary({ category, targetUrl, onClose }: PayloadLibraryProps) {
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const payloads: PayloadItem[] = PAYLOADS[category || ""] || [];
   const filtered = search
     ? payloads.filter((p) =>
         p.payload.toLowerCase().includes(search.toLowerCase()) ||
@@ -29,13 +41,13 @@ export default function PayloadLibrary({ category, targetUrl, onClose }) {
       )
     : payloads;
 
-  function handleCopy(payload) {
+  function handleCopy(payload: string) {
     navigator.clipboard.writeText(payload)
       .then(() => toast.success("Payload copied"))
       .catch(() => toast.error("Failed to copy"));
   }
 
-  function handleTest(payload) {
+  function handleTest(payload: string) {
     if (!targetUrl) return;
     const base = targetUrl.replace(/\/+$/, "");
     const testUrl = `${base}?q=${encodeURIComponent(payload)}`;
@@ -43,11 +55,11 @@ export default function PayloadLibrary({ category, targetUrl, onClose }) {
   }
 
   return (
-    <div className="bg-surface-2 border border-border rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+    <div className="bg-surface-2 border border-white/5 rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-text uppercase tracking-wider">
-            {categoryLabels[category] || category}
+            {categoryLabels[category || ""] || category}
           </span>
           <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent-subtle text-accent">{payloads.length}</span>
         </div>
@@ -58,8 +70,8 @@ export default function PayloadLibrary({ category, targetUrl, onClose }) {
         )}
       </div>
 
-      <div className="px-4 py-2 border-b border-border">
-        <div className="flex items-center gap-2 bg-surface border border-border rounded-lg px-3 py-1.5">
+      <div className="px-4 py-2 border-b border-white/5">
+        <div className="flex items-center gap-2 bg-surface border border-white/5 rounded-lg px-3 py-1.5">
           <Search size={13} className="text-text-dim shrink-0" />
           <input
             value={search}
@@ -70,7 +82,7 @@ export default function PayloadLibrary({ category, targetUrl, onClose }) {
         </div>
       </div>
 
-      <div className="max-h-80 overflow-y-auto divide-y divide-border">
+      <div className="max-h-80 overflow-y-auto divide-y divide-white/5">
         {filtered.length === 0 ? (
           <div className="px-4 py-6 text-center text-xs text-text-dim">No payloads match your filter.</div>
         ) : (
@@ -90,13 +102,13 @@ export default function PayloadLibrary({ category, targetUrl, onClose }) {
                 <span className="text-[10px] text-text-dim/70 truncate">{p.notes}</span>
                 <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => handleCopy(p.payload)}
-                    className="p-1 rounded hover:bg-border text-text-dim hover:text-text transition-colors"
+                    className="p-1 rounded hover:bg-white/5 text-text-dim hover:text-text transition-colors"
                     title="Copy payload">
                     <Copy size={12} />
                   </button>
                   {targetUrl && (
                     <button onClick={() => handleTest(p.payload)}
-                      className="p-1 rounded hover:bg-border text-accent hover:text-accent-hover transition-colors"
+                      className="p-1 rounded hover:bg-white/5 text-accent hover:text-accent-hover transition-colors"
                       title="Test on target URL">
                       <ExternalLink size={12} />
                     </button>

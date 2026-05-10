@@ -1,17 +1,73 @@
 import { useState } from "react";
 import { Brain, Loader2, AlertTriangle, CheckCircle, X, ChevronDown, ChevronRight } from "lucide-react";
 import toast from "react-hot-toast";
+import type { Stats } from "../types";
 
-const severityColors = { critical: "#e05a4f", high: "#f0b429", medium: "#4a9eff", low: "#7c7e94" };
+interface TriageFinding {
+  id: number;
+  name: string;
+  severity: string;
+  priority_rank: number;
+  confidence: number;
+  likely_false_positive: boolean;
+  triage_note?: string;
+}
 
-export default function AIPanel({ targetId, stats, hasProgramScope }) {
-  const [surfaceResult, setSurfaceResult] = useState(null);
-  const [triageResult, setTriageResult] = useState(null);
-  const [fpResult, setFpResult] = useState(null);
-  const [scopeResult, setScopeResult] = useState(null);
-  const [advisorResult, setAdvisorResult] = useState(null);
-  const [reportResult, setReportResult] = useState(null);
-  const [loading, setLoading] = useState(null);
+interface FpFinding {
+  name: string;
+  fp_score: number;
+  reasoning?: string;
+}
+
+interface ScopeResult {
+  coverage_note: string;
+  in_scope_confirmed?: string[];
+  out_of_scope_flagged?: string[];
+  unclear?: string[];
+  high_value?: string[];
+}
+
+interface AdvisorSuggestion {
+  url: string;
+  suggestions: {
+    test: string;
+    reason: string;
+    payload_hint: string;
+  }[];
+}
+
+interface SurfaceResult {
+  surface_summary: string;
+  anomalies?: { url: string; reason: string }[];
+  recommended_focus?: { url: string; rationale: string }[];
+}
+
+const severityColors: Record<string, string> = { critical: "#e05a4f", high: "#f0b429", medium: "#4a9eff", low: "#7c7e94" };
+
+interface PriorityBadgeProps {
+  rank: number;
+}
+
+function PriorityBadge({ rank }: PriorityBadgeProps) {
+  const colors: Record<number, string> = { 1: "#e05a4f", 2: "#f0b429", 3: "#4a9eff" };
+  const c = colors[rank] || "#7c7e94";
+  return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${c}22`, color: c }}>#{rank}</span>;
+}
+
+interface AIPanelProps {
+  targetId: number;
+  stats?: Stats;
+  hasProgramScope?: boolean;
+}
+
+export default function AIPanel({ targetId, stats, hasProgramScope }: AIPanelProps) {
+  const [surfaceResult, setSurfaceResult] = useState<SurfaceResult | null>(null);
+  const [triageResult, setTriageResult] = useState<TriageFinding[] | null>(null);
+  const [fpResult, setFpResult] = useState<FpFinding[] | null>(null);
+  const [scopeResult, setScopeResult] = useState<ScopeResult | null>(null);
+  const [advisorResult, setAdvisorResult] = useState<AdvisorSuggestion[] | null>(null);
+  const [reportResult, setReportResult] = useState<string | null>(null);
+  const [loading, setLoading] = useState<string | null>(null);
   const [isEditingReport, setIsEditingReport] = useState(false);
 
   async function runSurface() {
@@ -25,7 +81,7 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
       if (!r.ok) throw new Error((await r.json()).detail || "Request failed");
       setSurfaceResult(await r.json());
       toast.success("Surface analysis complete");
-    } catch (e) { toast.error(e.message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setLoading(null); }
   }
 
@@ -40,7 +96,7 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
       if (!r.ok) throw new Error((await r.json()).detail || "Request failed");
       setTriageResult(await r.json());
       toast.success("Triage complete");
-    } catch (e) { toast.error(e.message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setLoading(null); }
   }
 
@@ -55,7 +111,7 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
       if (!r.ok) throw new Error((await r.json()).detail || "Request failed");
       setFpResult(await r.json());
       toast.success("FP filter complete");
-    } catch (e) { toast.error(e.message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setLoading(null); }
   }
 
@@ -70,7 +126,7 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
       if (!r.ok) throw new Error((await r.json()).detail || "Request failed");
       setScopeResult(await r.json());
       toast.success("Scope analysis complete");
-    } catch (e) { toast.error(e.message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setLoading(null); }
   }
 
@@ -85,7 +141,7 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
       if (!r.ok) throw new Error((await r.json()).detail || "Request failed");
       setAdvisorResult(await r.json());
       toast.success("Testing suggestions generated");
-    } catch (e) { toast.error(e.message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setLoading(null); }
   }
 
@@ -107,23 +163,19 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
       setReportResult(data.report);
       setIsEditingReport(true);
       toast.success("Report draft generated");
-    } catch (e) { toast.error(e.message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setLoading(null); }
   }
 
   function copyReport() {
-    navigator.clipboard.writeText(reportResult);
-    toast.success("Report copied to clipboard");
-  }
-
-  function PriorityBadge({ rank }) {
-    const colors = { 1: "#e05a4f", 2: "#f0b429", 3: "#4a9eff" };
-    const c = colors[rank] || "#7c7e94";
-    return <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: `${c}22`, color: c }}>#{rank}</span>;
+    if (reportResult) {
+      navigator.clipboard.writeText(reportResult);
+      toast.success("Report copied to clipboard");
+    }
   }
 
   return (
-    <div className="bg-surface border border-border rounded-xl p-5 space-y-5">
+    <div className="bg-surface border border-white/5 rounded-xl p-5 space-y-5">
       <div className="flex items-center gap-2">
         <Brain size={16} className="text-accent" />
         <h3 className="text-xs font-semibold text-text uppercase tracking-wider">AI Analysis</h3>
@@ -185,7 +237,7 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
           <div className="space-y-1.5">
             {triageResult.length === 0 && <p className="text-xs text-text-dim">No findings to triage.</p>}
             {triageResult.map((f, i) => (
-              <div key={i} className={`bg-surface-2 border rounded-lg p-3 text-xs ${f.likely_false_positive ? "border-red/20 opacity-50" : "border-border"}`}>
+              <div key={i} className={`bg-surface-2 border rounded-lg p-3 text-xs ${f.likely_false_positive ? "border-red/20 opacity-50" : "border-white/5"}`}>
                 <div className="flex items-center gap-2 mb-1">
                   <PriorityBadge rank={f.priority_rank} />
                   <span className={`font-medium text-text text-[11px] ${f.likely_false_positive ? "line-through" : ""}`}>{f.name}</span>
@@ -229,7 +281,7 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
               const score = f.fp_score || 0.5;
               const likelyFp = score < 0.3;
               return (
-                <div key={i} className={`bg-surface-2 border rounded-lg p-3 text-xs ${likelyFp ? "border-red/20 opacity-40" : "border-border"}`}>
+                <div key={i} className={`bg-surface-2 border rounded-lg p-3 text-xs ${likelyFp ? "border-red/20 opacity-40" : "border-white/5"}`}>
                   <div className="flex items-center gap-2 mb-1">
                     {likelyFp ? <X size={12} className="text-red" /> : <CheckCircle size={12} className="text-green" />}
                     <span className="font-medium text-text text-[11px]">{f.name}</span>
@@ -313,7 +365,7 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
         {advisorResult && (
           <div className="space-y-2">
             {advisorResult.map((a, i) => (
-              <div key={i} className="text-[10px] text-text-dim bg-surface-2 p-3 rounded-lg border border-border/50">
+              <div key={i} className="text-[10px] text-text-dim bg-surface-2 p-3 rounded-lg border border-white/5">
                 <div className="font-mono text-accent mb-1">{a.url}</div>
                 <div className="space-y-2">
                   {a.suggestions.map((s, si) => (
@@ -331,7 +383,7 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
           </div>
         )}
         {!advisorResult && (
-          <div className="text-[10px] text-text-dim italic bg-surface-2 p-2 rounded-lg border border-border/50">
+          <div className="text-[10px] text-text-dim italic bg-surface-2 p-2 rounded-lg border border-white/5">
             AI will analyze the technology stack and suggest manual testing vectors for the Manual Workspace.
           </div>
         )}
@@ -356,7 +408,7 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
         </div>
         {reportResult && (
           <div className="space-y-2">
-            <div className="bg-surface-2 p-1 rounded-lg border border-border/50">
+            <div className="bg-surface-2 p-1 rounded-lg border border-white/5">
               <textarea
                 value={reportResult}
                 onChange={(e) => setReportResult(e.target.value)}
@@ -371,7 +423,7 @@ export default function AIPanel({ targetId, stats, hasProgramScope }) {
           </div>
         )}
         {!reportResult && (
-          <div className="text-[10px] text-text-dim italic bg-surface-2 p-2 rounded-lg border border-border/50">
+          <div className="text-[10px] text-text-dim italic bg-surface-2 p-2 rounded-lg border border-white/5">
             Synthesize validated findings into a professional security report. You can edit and add PoC media before copying.
           </div>
         )}

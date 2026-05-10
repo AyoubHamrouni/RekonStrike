@@ -1,23 +1,32 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Crosshair, Globe, Server, BookOpen, HelpCircle,
+  Crosshair, Globe, Server, HelpCircle,
   CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import { fetchPhases, startScan } from "../api";
 import toast from "react-hot-toast";
+import type { Phase } from "../types";
+import type { ComponentType } from "react";
 
-const TARGET_TYPES = [
+interface TargetTypeConfig {
+  value: string;
+  label: string;
+  icon: ComponentType<{ size?: number }>;
+  desc: string;
+}
+
+const TARGET_TYPES: TargetTypeConfig[] = [
   { value: "domain", label: "Domain", icon: Globe, desc: "Discover subdomains, crawl endpoints, and scan for vulnerabilities across the entire domain scope." },
   { value: "ip", label: "IP Range", icon: Server, desc: "Scan IP ranges for open ports, services, and hosted web applications." },
 ];
 
-const LEARN_TYPES = {
+const LEARN_TYPES: Record<string, string> = {
   domain: "Best for bug bounty programs where you need to map the entire attack surface from a root domain. Starts with passive discovery and progressively deepens.",
   ip: "Best for infrastructure assessments where you have a known IP range. Skips subdomain discovery and goes straight to port scanning.",
 };
 
-const LEARN_PHASES = {
+const LEARN_PHASES: Record<number, string> = {
   0: "Validates the target and loads scope rules to ensure everything is configured correctly.",
   1: "Searches public sources (certificate logs, search engines, GitHub) to discover subdomains without touching the target's servers.",
   2: "Checks which subdomains actually resolve in DNS, what ports are open, and if any cloud assets exist.",
@@ -27,27 +36,17 @@ const LEARN_PHASES = {
   6: "Calculates ROI scores and consolidates all findings into a prioritized report.",
 };
 
-const PHASE_NAMES = {
-  0: "Scope Validation",
-  1: "Passive Reconnaissance",
-  2: "Active Reconnaissance",
-  3: "Web Probing",
-  4: "Content Discovery",
-  5: "Vulnerability Scanning",
-  6: "ROI Reporting",
-};
-
 export default function NewScan() {
   const navigate = useNavigate();
   const [target, setTarget] = useState("");
   const [targetType, setTargetType] = useState("domain");
-  const [phases, setPhases] = useState([]);
-  const [selectedPhases, setSelectedPhases] = useState(new Set());
+  const [phases, setPhases] = useState<Phase[]>([]);
+  const [selectedPhases, setSelectedPhases] = useState<Set<number>>(new Set());
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [phasesLoading, setPhasesLoading] = useState(true);
-  const [phasesError, setPhasesError] = useState(null);
-  const [showLearn, setShowLearn] = useState({});
+  const [phasesError, setPhasesError] = useState<string | null>(null);
+  const [showLearn, setShowLearn] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setPhasesLoading(true);
@@ -57,7 +56,7 @@ export default function NewScan() {
         setPhases(data);
         setSelectedPhases(new Set(data.map((p) => p.id)));
       })
-      .catch((err) => {
+      .catch((err: Error) => {
         setPhasesError(err.message || "Failed to load phases");
         toast.error("Failed to load phases");
       })
@@ -65,7 +64,7 @@ export default function NewScan() {
   }, []);
 
   const validate = useCallback(() => {
-    const errs = {};
+    const errs: Record<string, string> = {};
     if (!target.trim()) errs.target = "Target is required";
     if (targetType === "domain" && !/^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(target.trim())) {
       errs.target = "Enter a valid domain (e.g., example.com)";
@@ -79,20 +78,25 @@ export default function NewScan() {
     if (!validate()) return;
     setSubmitting(true);
     try {
-      const result = await startScan(target.trim(), targetType, Array.from(selectedPhases));
+      const result = await startScan({
+        target: target.trim(),
+        target_type: targetType,
+        phases: Array.from(selectedPhases),
+      });
       toast.success("Scan started");
-      navigate(`/scan/${result.session_id || result.id}`);
+      navigate(`/scan/${result.session_id}`);
     } catch (err) {
-      toast.error(err.message || "Failed to start scan");
+      toast.error((err as Error).message || "Failed to start scan");
     } finally {
       setSubmitting(false);
     }
   }, [target, targetType, selectedPhases, validate, navigate]);
 
-  const togglePhase = (phaseId) => {
+  const togglePhase = (phaseId: number) => {
     setSelectedPhases((prev) => {
       const next = new Set(prev);
-      if (next.has(phaseId)) next.delete(phaseId); else next.add(phaseId);
+      if (next.has(phaseId)) next.delete(phaseId);
+      else next.add(phaseId);
       return next;
     });
   };
@@ -113,7 +117,7 @@ export default function NewScan() {
       </div>
 
       {/* Target & Type */}
-      <div className="bg-surface border border-border rounded-xl p-5 space-y-5">
+      <div className="bg-surface border border-white/5 rounded-xl p-5 space-y-5">
         <div>
           <label htmlFor="target-input" className="text-xs font-medium text-text-dim mb-1.5 block">
             Target
@@ -125,13 +129,12 @@ export default function NewScan() {
             onChange={(e) => setTarget(e.target.value)}
             placeholder={targetType === "domain" ? "example.com" : "192.168.1.0/24"}
             className={`w-full px-3 py-2 bg-surface-2 border rounded-lg text-sm text-text placeholder:text-text-dim/40 focus:outline-none focus:border-accent transition-colors ${
-              errors.target ? "border-red" : "border-border"
+              errors.target ? "border-red" : "border-white/5"
             }`}
             aria-invalid={!!errors.target}
-            aria-describedby={errors.target ? "target-error" : undefined}
           />
           {errors.target && (
-            <p id="target-error" className="text-xs text-red mt-1 flex items-center gap-1">
+            <p className="text-xs text-red mt-1 flex items-center gap-1">
               <AlertTriangle size={11} /> {errors.target}
             </p>
           )}
@@ -149,7 +152,7 @@ export default function NewScan() {
                 className={`text-left p-3 rounded-lg border transition-all ${
                   targetType === value
                     ? "bg-accent-subtle border-accent"
-                    : "bg-surface-2 border-border hover:border-border-light"
+                    : "bg-surface-2 border-white/5 hover:border-white/10"
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1">
@@ -180,7 +183,7 @@ export default function NewScan() {
       </div>
 
       {/* Phases */}
-      <div className="bg-surface border border-border rounded-xl p-5">
+      <div className="bg-surface border border-white/5 rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-text">Phases</h2>
           {!phasesLoading && !phasesError && (
@@ -216,7 +219,7 @@ export default function NewScan() {
                 setPhasesError(null);
                 fetchPhases()
                   .then((data) => { setPhases(data); setSelectedPhases(new Set(data.map((p) => p.id))); })
-                  .catch((err) => setPhasesError(err.message))
+                  .catch((err: Error) => setPhasesError(err.message))
                   .finally(() => setPhasesLoading(false));
               }}
               className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-2 hover:bg-border text-text rounded-lg text-xs font-medium transition-colors"
@@ -238,20 +241,20 @@ export default function NewScan() {
                   className={`w-full text-left p-3 rounded-lg border transition-all ${
                     selectedPhases.has(p.id)
                       ? "bg-accent-subtle border-accent/30"
-                      : "bg-surface-2 border-border hover:border-border-light"
+                      : "bg-surface-2 border-white/5 hover:border-white/10"
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
                       selectedPhases.has(p.id)
                         ? "bg-accent text-white"
-                        : "bg-surface border border-border"
+                        : "bg-surface border border-white/5"
                     }`}>
                       {selectedPhases.has(p.id) && <CheckCircle size={12} />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-text">
-                        Phase {p.number || p.id}: {p.name || PHASE_NAMES[p.id] || `Phase ${p.id}`}
+                        Phase {p.number || p.id}: {p.name}
                       </div>
                       <p className="text-xs text-text-dim mt-0.5 leading-relaxed">
                         {p.description || LEARN_PHASES[p.id] || ""}

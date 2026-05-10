@@ -1,6 +1,16 @@
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
-export default function ErrorState({ title = "Something went wrong", message, onRetry }) {
+interface ErrorStateProps {
+  title?: string;
+  message?: string;
+  onRetry?: () => void;
+}
+
+export default function ErrorState({
+  title = "Something went wrong",
+  message,
+  onRetry,
+}: ErrorStateProps) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center px-4">
       <div className="w-14 h-14 rounded-2xl bg-red-subtle border border-red/20 flex items-center justify-center mb-4">

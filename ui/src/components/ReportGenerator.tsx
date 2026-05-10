@@ -3,26 +3,33 @@ import { X, Download, Copy, ChevronRight, Sparkles, Settings, Eye, FileText, Loa
 import toast from "react-hot-toast";
 import { PLATFORMS, formatReport } from "../data/reportTemplates";
 import { getAIConfig, saveAIConfig, clearAIConfig, enhanceFindings, generateExecutiveSummary } from "../services/aiService";
+import type { Finding } from "../types";
 
-export default function ReportGenerator({ findings, targetUrl, onClose }) {
+interface ReportGeneratorProps {
+  findings: Finding[];
+  targetUrl?: string;
+  onClose?: () => void;
+}
+
+export default function ReportGenerator({ findings, targetUrl, onClose }: ReportGeneratorProps) {
   const [step, setStep] = useState("configure");
-  const [selectedIds, setSelectedIds] = useState(() => findings.map((f) => f._ts));
+  const [selectedIds, setSelectedIds] = useState<number[]>(() => findings.map((f) => f._ts));
   const [platform, setPlatform] = useState("hackerone");
   const [useAI, setUseAI] = useState(false);
-  const [aiConfig, setAIConfig] = useState(() => getAIConfig());
+  const [aiConfig, setAIConfig] = useState<{ apiKey: string; model: string; baseUrl: string } | null>(() => getAIConfig());
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiModel, setAiModel] = useState("gpt-4o-mini");
   const [aiBaseUrl, setAiBaseUrl] = useState("https://api.openai.com/v1/chat/completions");
   const [aiProgress, setAiProgress] = useState("");
   const [enhancing, setEnhancing] = useState(false);
-  const [enhancedFindings, setEnhancedFindings] = useState(null);
+  const [enhancedFindings, setEnhancedFindings] = useState<Finding[] | null>(null);
   const [reportContent, setReportContent] = useState("");
   const [showConfig, setShowConfig] = useState(false);
   const [livePreview, setLivePreview] = useState(false);
 
   const selected = findings.filter((f) => selectedIds.includes(f._ts));
   const activeFindings = enhancedFindings || selected;
-  const platformData = PLATFORMS[platform];
+  const platformData = PLATFORMS[platform as keyof typeof PLATFORMS];
 
   useEffect(() => {
     if (livePreview && activeFindings.length > 0) {
@@ -30,7 +37,7 @@ export default function ReportGenerator({ findings, targetUrl, onClose }) {
     }
   }, [livePreview, activeFindings, platform, targetUrl, enhancedFindings]);
 
-  function toggleFinding(id) {
+  function toggleFinding(id: number) {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
@@ -53,7 +60,7 @@ export default function ReportGenerator({ findings, targetUrl, onClose }) {
         setAiProgress("Enhancement complete");
         toast.success(`Enhanced ${enhanced.length} finding${enhanced.length > 1 ? "s" : ""}`);
       })
-      .catch((err) => {
+      .catch((err: Error) => {
         toast.error(err.message);
         setAiProgress("");
       })
@@ -74,7 +81,7 @@ export default function ReportGenerator({ findings, targetUrl, onClose }) {
   }
 
   function handleDownload() {
-    const ext = platform === "generic" ? "md" : "md";
+    const ext = "md";
     const blob = new Blob([reportContent], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -86,14 +93,14 @@ export default function ReportGenerator({ findings, targetUrl, onClose }) {
     toast.success("Report downloaded");
   }
 
-  const severityIcon = (s) => {
-    const colors = { critical: "#e05a4f", high: "#f0b429", medium: "#4a9eff", low: "#7c7e94" };
+  const severityIcon = (s: string) => {
+    const colors: Record<string, string> = { critical: "#e05a4f", high: "#f0b429", medium: "#4a9eff", low: "#7c7e94" };
     return { background: colors[s] || colors.low };
   };
 
   return (
-    <div className="bg-surface border border-border rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+    <div className="bg-surface border border-white/5 rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
         <div className="flex items-center gap-2.5">
           <FileText size={18} className="text-accent" />
           <h2 className="text-sm font-semibold text-text">Report Generator</h2>
@@ -112,7 +119,7 @@ export default function ReportGenerator({ findings, targetUrl, onClose }) {
                 const active = platform === key;
                 return (
                   <button key={key} onClick={() => setPlatform(key)}
-                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-xs transition-all ${active ? "border-accent bg-accent-subtle text-accent" : "border-border bg-surface-2 text-text-dim hover:border-border-light"}`}>
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-xs transition-all ${active ? "border-accent bg-accent-subtle text-accent" : "border-white/5 bg-surface-2 text-text-dim hover:border-white/10"}`}>
                     <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold"
                       style={{ background: active ? `${p.color}22` : "var(--color-surface)", color: p.color }}>
                       {p.icon}
@@ -138,7 +145,7 @@ export default function ReportGenerator({ findings, targetUrl, onClose }) {
                 const checked = selectedIds.includes(f._ts);
                 return (
                   <label key={f._ts}
-                    className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-xs cursor-pointer transition-colors ${checked ? "border-accent/40 bg-accent-subtle/20" : "border-border bg-surface-2 hover:border-border-light"}`}>
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-xs cursor-pointer transition-colors ${checked ? "border-accent/40 bg-accent-subtle/20" : "border-white/5 bg-surface-2 hover:border-white/10"}`}>
                     <input type="checkbox" checked={checked} onChange={() => toggleFinding(f._ts)}
                       className="accent-accent w-3.5 h-3.5 rounded" />
                     <span className="w-2 h-2 rounded-full shrink-0" style={severityIcon(f.severity)} />
@@ -153,7 +160,7 @@ export default function ReportGenerator({ findings, targetUrl, onClose }) {
             </div>
           </div>
 
-          <div className="bg-surface-2 border border-border rounded-xl p-4 space-y-3">
+          <div className="bg-surface-2 border border-white/5 rounded-xl p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Sparkles size={14} className="text-yellow" />
@@ -174,19 +181,19 @@ export default function ReportGenerator({ findings, targetUrl, onClose }) {
                       <label className="text-[10px] text-text-dim block mb-1">API Endpoint</label>
                       <input value={aiBaseUrl} onChange={(e) => setAiBaseUrl(e.target.value)}
                         placeholder="https://api.openai.com/v1/chat/completions"
-                        className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text outline-none focus:border-accent font-mono" />
+                        className="w-full bg-surface border border-white/5 rounded-lg px-3 py-1.5 text-xs text-text outline-none focus:border-accent font-mono" />
                     </div>
                     <div>
                       <label className="text-[10px] text-text-dim block mb-1">Model</label>
                       <input value={aiModel} onChange={(e) => setAiModel(e.target.value)}
                         placeholder="gpt-4o-mini"
-                        className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text outline-none focus:border-accent font-mono" />
+                        className="w-full bg-surface border border-white/5 rounded-lg px-3 py-1.5 text-xs text-text outline-none focus:border-accent font-mono" />
                     </div>
                     <div>
                       <label className="text-[10px] text-text-dim block mb-1">API Key</label>
                       <input type="password" value={aiApiKey} onChange={(e) => setAiApiKey(e.target.value)}
                         placeholder="sk-..."
-                        className="w-full bg-surface border border-border rounded-lg px-3 py-1.5 text-xs text-text outline-none focus:border-accent font-mono" />
+                        className="w-full bg-surface border border-white/5 rounded-lg px-3 py-1.5 text-xs text-text outline-none focus:border-accent font-mono" />
                     </div>
                   </>
                 ) : (
@@ -227,7 +234,7 @@ export default function ReportGenerator({ findings, targetUrl, onClose }) {
 
       {step === "preview" && (
         <div className="flex flex-col">
-          <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-surface-2">
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-white/5 bg-surface-2">
             <button onClick={() => { setStep("configure"); setLivePreview(false); }}
               className="text-[11px] text-text-dim hover:text-text transition-colors">
               &larr; Back to configure
@@ -236,11 +243,11 @@ export default function ReportGenerator({ findings, targetUrl, onClose }) {
             <span className="text-[11px] text-text-dim">{platformData?.label} &middot; {activeFindings.length} finding{activeFindings.length > 1 ? "s" : ""}{enhancedFindings ? " &middot; AI-enhanced" : ""}</span>
             <div className="flex-1" />
             <button onClick={handleCopy}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-2 border border-border text-[10px] text-text-dim hover:text-text hover:border-border-light transition-colors">
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-2 border border-white/5 text-[10px] text-text-dim hover:text-text hover:border-white/10 transition-colors">
               <Copy size={11} /> Copy
             </button>
             <button onClick={handleDownload}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-2 border border-border text-[10px] text-text-dim hover:text-text hover:border-border-light transition-colors">
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-surface-2 border border-white/5 text-[10px] text-text-dim hover:text-text hover:border-white/10 transition-colors">
               <Download size={11} /> Download .md
             </button>
           </div>

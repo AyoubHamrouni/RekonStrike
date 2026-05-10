@@ -7,19 +7,39 @@ import InfraModule from "./modules/InfraModule";
 import FindingTracker from "./FindingTracker";
 import ReportGenerator from "./ReportGenerator";
 import { fetchSubdomains, fetchLiveHosts, fetchVulnerabilities, fetchEndpoints, fetchStats } from "../api";
+import type { Stats, Subdomain, LiveHost, Vulnerability } from "../types";
 
-const modules = [
+interface IntelPanelProps {
+  host: string;
+  targetId: number;
+}
+
+interface ManualWorkspaceProps {
+  targetId: number;
+  host: string;
+}
+
+interface ModuleDef {
+  key: string;
+  name: string;
+  icon: typeof Shield;
+  desc: string;
+  color: string;
+  Component: typeof AuthModule;
+}
+
+const modules: ModuleDef[] = [
   { key: "auth", name: "Authentication & Authorization", icon: Shield, desc: "12 tests — JWT attacks, IDOR, session issues, privilege escalation, OAuth flaws", color: "#6c5ce7", Component: AuthModule },
   { key: "injection", name: "Injection Attacks", icon: Crosshair, desc: "12 tests — SQLi, XSS, SSTI, command injection, SSRF, XXE, path traversal, NoSQLi", color: "#e05a4f", Component: InjectionModule },
   { key: "logic", name: "Business Logic", icon: BugPlay, desc: "10 tests — IDOR, mass assignment, race conditions, price manipulation, step skipping, privilege escalation", color: "#f0b429", Component: LogicModule },
   { key: "infrastructure", name: "Infrastructure", icon: Server, desc: "12 tests — SSRF, XXE, CSRF, path traversal, file upload, CORS, clickjacking, info disclosure", color: "#00d4aa", Component: InfraModule },
 ];
 
-function IntelPanel({ host, targetId }) {
-  const [stats, setStats] = useState(null);
-  const [subdomains, setSubdomains] = useState([]);
-  const [hosts, setHosts] = useState([]);
-  const [vulns, setVulns] = useState([]);
+function IntelPanel({ host, targetId }: IntelPanelProps) {
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [subdomains, setSubdomains] = useState<Subdomain[]>([]);
+  const [hosts, setHosts] = useState<LiveHost[]>([]);
+  const [vulns, setVulns] = useState<Vulnerability[]>([]);
 
   useEffect(() => {
     if (!targetId) return;
@@ -39,17 +59,17 @@ function IntelPanel({ host, targetId }) {
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="bg-surface-2 border border-border rounded-lg p-3">
+        <div className="bg-surface-2 border border-white/5 rounded-lg p-3">
           <div className="text-[10px] text-text-dim uppercase tracking-wider">Host</div>
           <div className="text-xs font-medium text-text mt-1 truncate">{host}</div>
         </div>
-        <div className="bg-surface-2 border border-border rounded-lg p-3">
+        <div className="bg-surface-2 border border-white/5 rounded-lg p-3">
           <div className="text-[10px] text-text-dim uppercase tracking-wider">IP</div>
           <div className="text-xs font-medium text-text mt-1 truncate">{currentHost?.ip || stats?.resolved_subdomains || "—"}</div>
         </div>
       </div>
 
-      <div className="bg-surface-2 border border-border rounded-lg p-3">
+      <div className="bg-surface-2 border border-white/5 rounded-lg p-3">
         <div className="text-[10px] text-text-dim uppercase tracking-wider mb-1.5">Attack Surface Summary</div>
         <div className="grid grid-cols-2 gap-y-1.5 text-xs">
           <span className="text-text-dim">Subdomains</span>
@@ -64,7 +84,7 @@ function IntelPanel({ host, targetId }) {
       </div>
 
       {currentHost?.response_headers && (
-        <div className="bg-surface-2 border border-border rounded-lg p-3">
+        <div className="bg-surface-2 border border-white/5 rounded-lg p-3">
           <div className="text-[10px] text-text-dim uppercase tracking-wider mb-1.5">Response Headers</div>
           {Object.entries(currentHost.response_headers).slice(0, 6).map(([k, v]) => (
             <div key={k} className="text-[10px] text-text-dim truncate mb-0.5">
@@ -74,7 +94,7 @@ function IntelPanel({ host, targetId }) {
         </div>
       )}
 
-      <div className="bg-surface-2 border border-border rounded-lg p-3">
+      <div className="bg-surface-2 border border-white/5 rounded-lg p-3">
         <div className="text-[10px] text-text-dim uppercase tracking-wider mb-1.5">Quick Actions</div>
         <div className="space-y-1">
           <a href={`http://${host}`} target="_blank" rel="noopener noreferrer"
@@ -93,7 +113,7 @@ function IntelPanel({ host, targetId }) {
       </div>
 
       {vulns.length > 0 && (
-        <div className="bg-surface-2 border border-border rounded-lg p-3">
+        <div className="bg-surface-2 border border-white/5 rounded-lg p-3">
           <div className="text-[10px] text-text-dim uppercase tracking-wider mb-1.5">Recent Vulnerabilities</div>
           {vulns.slice(0, 5).map((v, i) => (
             <div key={v.id || i} className="flex items-center gap-2 text-[11px] mb-1">
@@ -108,8 +128,8 @@ function IntelPanel({ host, targetId }) {
   );
 }
 
-export default function ManualWorkspace({ targetId, host, onBack }) {
-  const [activeModule, setActiveModule] = useState(null);
+export default function ManualWorkspace({ targetId, host }: ManualWorkspaceProps) {
+  const [activeModule, setActiveModule] = useState<string | null>(null);
   const [showTracker, setShowTracker] = useState(false);
   const [showReport, setShowReport] = useState(false);
 
@@ -187,7 +207,7 @@ export default function ManualWorkspace({ targetId, host, onBack }) {
             const Icon = mod.icon;
             return (
               <button key={mod.key} onClick={() => setActiveModule(mod.key)}
-                className="bg-surface-2 border border-border rounded-xl p-4 text-left card-hover group">
+                className="bg-surface-2 border border-white/5 rounded-xl p-4 text-left card-hover group">
                 <div className="flex items-start gap-3">
                   <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
                     style={{ background: `${mod.color}22` }}>

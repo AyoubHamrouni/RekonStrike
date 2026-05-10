@@ -3,10 +3,11 @@ import { X, Edit2, Trash2, Copy, Shield, Download, FileText, Sparkles, Loader2 }
 import toast from "react-hot-toast";
 import ReportGenerator from "./ReportGenerator";
 import { fetchVulnerabilities, aiReport } from "../api";
+import type { Finding, Vulnerability } from "../types";
 
-const severityColors = { critical: "#e05a4f", high: "#f0b429", medium: "#4a9eff", low: "#7c7e94" };
+const severityColors: Record<string, string> = { critical: "#e05a4f", high: "#f0b429", medium: "#4a9eff", low: "#7c7e94" };
 
-function exportSingleH1Report(finding, targetUrl) {
+function exportSingleH1Report(finding: Finding, targetUrl?: string): string {
   const lines = [
     `# Summary`,
     ``,
@@ -43,11 +44,17 @@ function exportSingleH1Report(finding, targetUrl) {
   return lines.join("\n");
 }
 
-function EditModal({ finding, onSave, onClose }) {
-  const [form, setForm] = useState({ ...finding });
+interface EditModalProps {
+  finding: Finding;
+  onSave: (finding: Finding) => void;
+  onClose: () => void;
+}
+
+function EditModal({ finding, onSave, onClose }: EditModalProps) {
+  const [form, setForm] = useState<Finding>({ ...finding });
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-surface border border-border rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6 space-y-4">
+      <div className="bg-surface border border-white/5 rounded-xl max-w-lg w-full max-h-[80vh] overflow-y-auto p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-semibold text-text">Edit Finding</h3>
           <button onClick={onClose} className="text-text-dim hover:text-text p-1"><X size={16} /></button>
@@ -55,17 +62,17 @@ function EditModal({ finding, onSave, onClose }) {
         <div>
           <label className="text-xs text-text-dim block mb-1">Title</label>
           <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
-            className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent" />
+            className="w-full bg-surface-2 border border-white/5 rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent" />
         </div>
         <div>
           <label className="text-xs text-text-dim block mb-1">Affected URL</label>
           <input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })}
-            className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent" />
+            className="w-full bg-surface-2 border border-white/5 rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent" />
         </div>
         <div>
           <label className="text-xs text-text-dim block mb-1">Severity</label>
-          <select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}
-            className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent">
+          <select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value as Finding["severity"] })}
+            className="w-full bg-surface-2 border border-white/5 rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent">
             <option value="critical">Critical</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
@@ -75,12 +82,12 @@ function EditModal({ finding, onSave, onClose }) {
         <div>
           <label className="text-xs text-text-dim block mb-1">Steps to Reproduce</label>
           <textarea value={form.steps} onChange={(e) => setForm({ ...form, steps: e.target.value })} rows={3}
-            className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent resize-none" />
+            className="w-full bg-surface-2 border border-white/5 rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent resize-none" />
         </div>
         <div>
           <label className="text-xs text-text-dim block mb-1">Impact</label>
           <textarea value={form.impact} onChange={(e) => setForm({ ...form, impact: e.target.value })} rows={2}
-            className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent resize-none" />
+            className="w-full bg-surface-2 border border-white/5 rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent resize-none" />
         </div>
         <div className="flex gap-2 pt-2">
           <button onClick={() => { onSave(form); onClose(); }}
@@ -97,13 +104,20 @@ function EditModal({ finding, onSave, onClose }) {
   );
 }
 
-export default function FindingTracker({ targetId, targetUrl, onClose, standalone = true }) {
-  const [findings, setFindings] = useState([]);
-  const [editing, setEditing] = useState(null);
+interface FindingTrackerProps {
+  targetId: number;
+  targetUrl?: string;
+  onClose?: () => void;
+  standalone?: boolean;
+}
+
+export default function FindingTracker({ targetId, targetUrl, onClose, standalone = true }: FindingTrackerProps) {
+  const [findings, setFindings] = useState<Finding[]>([]);
+  const [editing, setEditing] = useState<Finding | null>(null);
   const [showReportGen, setShowReportGen] = useState(false);
-  const [serverVulns, setServerVulns] = useState([]);
+  const [serverVulns, setServerVulns] = useState<Vulnerability[]>([]);
   const [showServerVulns, setShowServerVulns] = useState(false);
-  const [reportModal, setReportModal] = useState(null);
+  const [reportModal, setReportModal] = useState<number | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportText, setReportText] = useState("");
   const [reportPlatform, setReportPlatform] = useState("HackerOne");
@@ -116,7 +130,7 @@ export default function FindingTracker({ targetId, targetUrl, onClose, standalon
     } catch { setFindings([]); }
   }, [storageKey]);
 
-  function saveFindings(updated) {
+  function saveFindings(updated: Finding[]) {
     setFindings(updated);
     localStorage.setItem(storageKey, JSON.stringify(updated));
   }
@@ -130,14 +144,14 @@ export default function FindingTracker({ targetId, targetUrl, onClose, standalon
     } catch (e) { toast.error("Failed to load server vulns"); }
   }
 
-  async function handleDraftReport(vulnId) {
+  async function handleDraftReport(vulnId: number) {
     setReportLoading(true);
     setReportModal(vulnId);
     setReportText("");
     try {
       const r = await aiReport(targetId, { vulnerability_id: vulnId, platform: reportPlatform });
       setReportText(r.report || "");
-    } catch (e) { toast.error(e.message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setReportLoading(false); }
   }
 
@@ -145,13 +159,13 @@ export default function FindingTracker({ targetId, targetUrl, onClose, standalon
     navigator.clipboard.writeText(reportText).then(() => toast.success("Report copied")).catch(() => toast.error("Copy failed"));
   }
 
-  function handleDelete(idx) {
+  function handleDelete(idx: number) {
     const updated = findings.filter((_, i) => i !== idx);
     saveFindings(updated);
     toast.success("Finding deleted");
   }
 
-  function handleEdit(updated) {
+  function handleEdit(updated: Finding) {
     const idx = findings.findIndex((f) => f._ts === updated._ts);
     if (idx >= 0) {
       const updatedList = [...findings];
@@ -161,7 +175,7 @@ export default function FindingTracker({ targetId, targetUrl, onClose, standalon
     }
   }
 
-  function handleExportSingle(finding) {
+  function handleExportSingle(finding: Finding) {
     const report = exportSingleH1Report(finding, targetUrl);
     navigator.clipboard.writeText(report)
       .then(() => toast.success("H1 report copied to clipboard"))
@@ -179,7 +193,7 @@ export default function FindingTracker({ targetId, targetUrl, onClose, standalon
   }
 
   return (
-    <div className={`${standalone ? "bg-surface border border-border rounded-xl p-6" : ""} space-y-4`}>
+    <div className={`${standalone ? "bg-surface border border-white/5 rounded-xl p-6" : ""} space-y-4`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Shield size={16} className="text-accent" />
@@ -195,7 +209,7 @@ export default function FindingTracker({ targetId, targetUrl, onClose, standalon
                 Generate Report
               </button>
               <button onClick={() => { setShowReportGen(true); }}
-                className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-surface-2 border border-border text-[10px] text-text-dim hover:text-text hover:border-border-light transition-colors">
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-surface-2 border border-white/5 text-[10px] text-text-dim hover:text-text hover:border-white/10 transition-colors">
                 <Download size={11} />
                 Export
               </button>
@@ -220,7 +234,7 @@ export default function FindingTracker({ targetId, targetUrl, onClose, standalon
       ) : (
         <div className="space-y-3">
           {findings.map((f, i) => (
-            <div key={f._ts || i} className="bg-surface-2 border border-border rounded-lg p-4 space-y-2">
+            <div key={f._ts || i} className="bg-surface-2 border border-white/5 rounded-lg p-4 space-y-2">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="w-2 h-2 rounded-full shrink-0"
@@ -243,11 +257,11 @@ export default function FindingTracker({ targetId, targetUrl, onClose, standalon
               )}
               <div className="flex items-center gap-2 pt-1">
                 <button onClick={() => setEditing(f)}
-                  className="flex items-center gap-1 px-2 py-1 rounded text-[10px] text-text-dim hover:text-text hover:bg-border transition-colors">
+                  className="flex items-center gap-1 px-2 py-1 rounded text-[10px] text-text-dim hover:text-text hover:bg-white/5 transition-colors">
                   <Edit2 size={11} /> Edit
                 </button>
                 <button onClick={() => handleExportSingle(f)}
-                  className="flex items-center gap-1 px-2 py-1 rounded text-[10px] text-text-dim hover:text-text hover:bg-border transition-colors">
+                  className="flex items-center gap-1 px-2 py-1 rounded text-[10px] text-text-dim hover:text-text hover:bg-white/5 transition-colors">
                   <Copy size={11} /> Copy H1
                 </button>
                 <button onClick={() => handleDelete(i)}
@@ -269,7 +283,7 @@ export default function FindingTracker({ targetId, targetUrl, onClose, standalon
       )}
 
       {showServerVulns && (
-        <div className="space-y-3 pt-4 border-t border-border">
+        <div className="space-y-3 pt-4 border-t border-white/5">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-semibold text-text flex items-center gap-1">
               <Sparkles size={13} className="text-accent" />
@@ -277,7 +291,7 @@ export default function FindingTracker({ targetId, targetUrl, onClose, standalon
             </h3>
             <div className="flex items-center gap-2">
               <select value={reportPlatform} onChange={(e) => setReportPlatform(e.target.value)}
-                className="bg-surface-2 border border-border rounded-lg px-2 py-1 text-[10px] text-text outline-none">
+                className="bg-surface-2 border border-white/5 rounded-lg px-2 py-1 text-[10px] text-text outline-none">
                 <option value="HackerOne">HackerOne</option>
                 <option value="Bugcrowd">Bugcrowd</option>
                 <option value="Intigriti">Intigriti</option>
@@ -290,7 +304,7 @@ export default function FindingTracker({ targetId, targetUrl, onClose, standalon
           ) : (
             <div className="space-y-2">
               {serverVulns.map((v) => (
-                <div key={v.id} className="bg-surface-2 border border-border rounded-lg p-3 flex items-center justify-between">
+                <div key={v.id} className="bg-surface-2 border border-white/5 rounded-lg p-3 flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-2 h-2 rounded-full shrink-0"
                       style={{ background: severityColors[v.severity] || severityColors.low }} />
@@ -312,18 +326,17 @@ export default function FindingTracker({ targetId, targetUrl, onClose, standalon
         </div>
       )}
 
-      {/* Report Modal */}
       {reportModal && reportText && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-surface border border-border rounded-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-border">
+          <div className="bg-surface border border-white/5 rounded-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-white/5">
               <h3 className="text-sm font-semibold text-text">AI Draft Report — {reportPlatform}</h3>
               <button onClick={() => { setReportModal(null); setReportText(""); }}
                 className="text-text-dim hover:text-text p-1"><X size={16} /></button>
             </div>
             <textarea value={reportText} onChange={(e) => setReportText(e.target.value)}
               className="flex-1 p-4 text-xs text-text font-mono bg-surface outline-none resize-none min-h-[300px]" />
-            <div className="flex items-center gap-2 p-4 border-t border-border">
+            <div className="flex items-center gap-2 p-4 border-t border-white/5">
               <button onClick={copyReport}
                 className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent-hover transition-colors">
                 <Copy size={12} /> Copy to Clipboard

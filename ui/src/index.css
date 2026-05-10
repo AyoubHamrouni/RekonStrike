@@ -4,13 +4,15 @@
   --color-bg: #0a0b10;
   --color-surface: #12131a;
   --color-surface-2: #1a1b26;
+  --color-sidebar: #0c0d14;
+  --color-terminal: #08090e;
   --color-border: #252634;
   --color-border-light: #2e2f3e;
   --color-text: #e4e5ed;
   --color-text-dim: #9c9eb2;
-  --color-accent: #6c5ce7;
-  --color-accent-hover: #7f71f0;
-  --color-accent-subtle: rgba(108, 92, 231, 0.12);
+  --color-accent: #7c3aed;
+  --color-accent-hover: #8b5cf6;
+  --color-accent-subtle: rgba(124, 58, 237, 0.12);
   --color-green: #00d4aa;
   --color-green-subtle: rgba(0, 212, 170, 0.12);
   --color-yellow: #f0b429;

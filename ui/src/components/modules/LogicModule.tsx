@@ -1,7 +1,43 @@
 import { useState, useEffect } from "react";
-import { ChevronDown, ChevronRight, AlertTriangle, CheckCircle, XCircle, ExternalLink, BookOpen, Sparkles, Loader2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, AlertTriangle, CheckCircle, XCircle, BookOpen, Sparkles, Loader2, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { fetchEndpoints, fetchLiveHosts, aiAdvisor } from "../../api";
+
+interface TestState {
+  done?: boolean;
+  vulnerable?: boolean;
+}
+
+interface FindingForm {
+  url: string;
+  request: string;
+  response: string;
+  steps: string;
+  impact: string;
+  severity: string;
+  title: string;
+}
+
+interface DiscoverResult {
+  objectIds: boolean;
+  checkout: boolean;
+  coupons: boolean;
+  multiStep: boolean;
+  apiWrite: boolean;
+  moneyOps: boolean;
+}
+
+interface AiSuggestion {
+  test: string;
+  reason: string;
+  specific_url?: string;
+  payload_hint?: string;
+}
+
+interface LogicModuleProps {
+  host: string;
+  targetId: number;
+}
 
 const lessons = {
   what: "Business logic testing means understanding the application's intended flow, then asking 'what if I skip step 2?' or 'what if I do step 3 twice?' or 'what if user A tries user B's data?'. These aren't technical bugs — they're design flaws that let attackers abuse features in ways the developers didn't anticipate.",
@@ -45,17 +81,17 @@ const testItems = [
     instructions: "Target: {host}\nSend duplicate parameters — the server may process them differently:\n- ?user_id=victim&user_id=attacker\n- ?role=user&role=admin\n- ?action=view&action=delete\n\nCommon targets:\n- OAuth redirect_uri parameters\n- API endpoints with array-style params\n- SQL queries built from URL params" },
 ];
 
-function SeverityBadge({ severity }) {
-  const colors = { critical: "#e05a4f", high: "#f0b429", medium: "#4a9eff", low: "#7c7e94" };
+function SeverityBadge({ severity }: { severity: string }) {
+  const colors: Record<string, string> = { critical: "#e05a4f", high: "#f0b429", medium: "#4a9eff", low: "#7c7e94" };
   const c = colors[severity] || colors.low;
   return <span className="text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded"
     style={{ background: `${c}22`, color: c }}>{severity}</span>;
 }
 
-function CollapsibleLesson({ moduleName }) {
+function CollapsibleLesson({ moduleName: _moduleName }: { moduleName: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="bg-surface-2 border border-border rounded-xl overflow-hidden">
+    <div className="bg-surface-2 border border-white/5 rounded-xl overflow-hidden">
       <button onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-4 py-3 text-xs font-medium text-text hover:bg-surface-2/80 transition-colors">
         <div className="flex items-center gap-2">
@@ -92,8 +128,14 @@ function CollapsibleLesson({ moduleName }) {
   );
 }
 
-function VerifyForm({ host, onSave, onBack }) {
-  const [form, setForm] = useState({ url: "", request: "", response: "", steps: "", impact: "", severity: "high", title: "" });
+interface VerifyFormProps {
+  host: string;
+  onSave: () => void;
+  onBack: () => void;
+}
+
+function VerifyForm({ host, onSave, onBack }: VerifyFormProps) {
+  const [form, setForm] = useState<FindingForm>({ url: "", request: "", response: "", steps: "", impact: "", severity: "high", title: "" });
 
   const handleSave = () => {
     const finding = {
@@ -107,8 +149,8 @@ function VerifyForm({ host, onSave, onBack }) {
       const existing = JSON.parse(localStorage.getItem(storageKey) || "[]");
       existing.push(finding);
       localStorage.setItem(storageKey, JSON.stringify(existing));
-    } catch {}
-    onSave(finding);
+    } catch { /* ignore */ }
+    onSave();
     toast.success("Finding saved!");
     onBack();
   };
@@ -123,19 +165,19 @@ function VerifyForm({ host, onSave, onBack }) {
         <label className="text-[11px] text-text-dim block mb-1">Finding Title</label>
         <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
           placeholder="e.g. IDOR on User Profile Data"
-          className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent" />
+          className="w-full bg-surface-2 border border-white/5 rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent" />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-[11px] text-text-dim block mb-1">Affected URL</label>
           <input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })}
             placeholder={host}
-            className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent" />
+            className="w-full bg-surface-2 border border-white/5 rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent" />
         </div>
         <div>
           <label className="text-[11px] text-text-dim block mb-1">Severity</label>
           <select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}
-            className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent">
+            className="w-full bg-surface-2 border border-white/5 rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent">
             <option value="critical">Critical</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
@@ -146,24 +188,24 @@ function VerifyForm({ host, onSave, onBack }) {
       <div>
         <label className="text-[11px] text-text-dim block mb-1">Request</label>
         <textarea value={form.request} onChange={(e) => setForm({ ...form, request: e.target.value })} rows={3}
-          className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent resize-none font-mono" />
+          className="w-full bg-surface-2 border border-white/5 rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent resize-none font-mono" />
       </div>
       <div>
         <label className="text-[11px] text-text-dim block mb-1">Response</label>
         <textarea value={form.response} onChange={(e) => setForm({ ...form, response: e.target.value })} rows={3}
-          className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent resize-none font-mono" />
+          className="w-full bg-surface-2 border border-white/5 rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent resize-none font-mono" />
       </div>
       <div>
         <label className="text-[11px] text-text-dim block mb-1">Steps to Reproduce</label>
         <textarea value={form.steps} onChange={(e) => setForm({ ...form, steps: e.target.value })} rows={3}
           placeholder="1. Login as normal user\n2. Send GET /api/users/1001 with session cookie\n3. Change user ID to 1002\n4. Observe another user's profile data"
-          className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent resize-none" />
+          className="w-full bg-surface-2 border border-white/5 rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent resize-none" />
       </div>
       <div>
         <label className="text-[11px] text-text-dim block mb-1">Impact</label>
         <textarea value={form.impact} onChange={(e) => setForm({ ...form, impact: e.target.value })} rows={2}
           placeholder="An attacker can access and modify any user's sensitive data without authorization"
-          className="w-full bg-surface-2 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent resize-none" />
+          className="w-full bg-surface-2 border border-white/5 rounded-lg px-3 py-2 text-sm text-text outline-none focus:border-accent resize-none" />
       </div>
       <div className="flex gap-2 pt-2">
         <button onClick={handleSave}
@@ -179,19 +221,36 @@ function VerifyForm({ host, onSave, onBack }) {
   );
 }
 
-export default function LogicModule({ host, targetId, onBack }) {
+export default function LogicModule({ host, targetId }: LogicModuleProps) {
   const [tab, setTab] = useState("discover");
-  const [endpoints, setEndpoints] = useState([]);
-  const [discoverResults, setDiscoverResults] = useState(null);
-  const [tests, setTests] = useState(() => {
+  const [endpoints, setEndpoints] = useState<{ url?: string }[]>([]);
+  const [discoverResults, setDiscoverResults] = useState<DiscoverResult | null>(null);
+  const [tests, setTests] = useState<Record<string, TestState>>(() => {
     try {
       return JSON.parse(localStorage.getItem(`logic_tests_${host}`) || "{}");
     } catch { return {}; }
   });
-  const [showVerify, setShowVerify] = useState(null);
-  const [aiSuggestions, setAiSuggestions] = useState(null);
+  const [showVerify, setShowVerify] = useState<string | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<AiSuggestion[] | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [liveHostId, setLiveHostId] = useState(null);
+  const [liveHostId, setLiveHostId] = useState<number | null>(null);
+
+  function analyzeSurface(eps: { url?: string }[]) {
+    const urls = eps.map((e) => e.url || "");
+    const hostUrls = urls.filter((u) => u.toLowerCase().includes(host.toLowerCase()));
+    const allPaths = [...new Set(hostUrls.map((u) => {
+      try { return new URL(u).pathname; } catch { return u; }
+    }))];
+    const found: DiscoverResult = {
+      objectIds: allPaths.some((p) => /\/(\d+)\/?$|\/users\/\d+|\/orders\/\d+|\/items\/\d+/i.test(p)),
+      checkout: allPaths.some((p) => /checkout|cart|purchase|order|payment|pay/i.test(p)),
+      coupons: allPaths.some((p) => /coupon|promo|discount|refer|gift/i.test(p)),
+      multiStep: allPaths.some((p) => /step|wizard|onboard|signup.*step/i.test(p)),
+      apiWrite: allPaths.some((p) => /\/api\/|\/v1\/|\/v2\//i.test(p)),
+      moneyOps: allPaths.some((p) => /transfer|withdraw|deposit|balance|wallet/i.test(p)),
+    };
+    setDiscoverResults(found);
+  }
 
   useEffect(() => {
     fetchEndpoints(targetId, { size: 500 }).then((r) => {
@@ -204,30 +263,13 @@ export default function LogicModule({ host, targetId, onBack }) {
     }).catch(() => {});
   }, [targetId]);
 
-  function analyzeSurface(eps) {
-    const urls = eps.map((e) => e.url || "");
-    const hostUrls = urls.filter((u) => u.toLowerCase().includes(host.toLowerCase()));
-    const allPaths = [...new Set(hostUrls.map((u) => {
-      try { return new URL(u).pathname; } catch { return u; }
-    }))];
-    const found = {
-      objectIds: allPaths.some((p) => /\/(\d+)\/?$|\/users\/\d+|\/orders\/\d+|\/items\/\d+/i.test(p)),
-      checkout: allPaths.some((p) => /checkout|cart|purchase|order|payment|pay/i.test(p)),
-      coupons: allPaths.some((p) => /coupon|promo|discount|refer|gift/i.test(p)),
-      multiStep: allPaths.some((p) => /step|wizard|onboard|signup.*step/i.test(p)),
-      apiWrite: allPaths.some((p) => /\/api\/|\/v1\/|\/v2\//i.test(p)),
-      moneyOps: allPaths.some((p) => /transfer|withdraw|deposit|balance|wallet/i.test(p)),
-    };
-    setDiscoverResults(found);
-  }
-
-  function toggleTest(key) {
+  function toggleTest(key: string) {
     const updated = { ...tests, [key]: { ...tests[key], done: !tests[key]?.done } };
     setTests(updated);
     localStorage.setItem(`logic_tests_${host}`, JSON.stringify(updated));
   }
 
-  function markVulnerable(key) {
+  function markVulnerable(key: string) {
     setShowVerify(key);
   }
 
@@ -240,7 +282,7 @@ export default function LogicModule({ host, targetId, onBack }) {
       setAiSuggestions(result.suggestions || []);
       if (!result.suggestions?.length) toast.success("No AI suggestions available");
       else toast.success(`Got ${result.suggestions.length} suggestions`);
-    } catch (e) { toast.error(e.message); }
+    } catch (e) { toast.error((e as Error).message); }
     finally { setAiLoading(false); }
   }
 
@@ -265,10 +307,10 @@ export default function LogicModule({ host, targetId, onBack }) {
     <div className="space-y-4">
       <CollapsibleLesson moduleName="logic" />
 
-      <div className="flex gap-1 border-b border-border">
+      <div className="flex gap-1 border-b border-white/5">
         {["discover", "test", "verify"].map((t) => {
-          const labels = { discover: "Discover", test: "Test", verify: "Verify" };
-          const icons = { discover: "🔍", test: "🧪", verify: "📋" };
+          const labels: Record<string, string> = { discover: "Discover", test: "Test", verify: "Verify" };
+          const icons: Record<string, string> = { discover: "🔍", test: "🧪", verify: "📋" };
           const active = tab === t;
           return (
             <button key={t} onClick={() => setTab(t)}
@@ -285,7 +327,7 @@ export default function LogicModule({ host, targetId, onBack }) {
           <div className="grid grid-cols-2 gap-2">
             {logicSurface.map((ep) => (
               <div key={ep.label}
-                className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs ${ep.found ? "bg-green-subtle border-green/30 text-green" : "bg-surface-2 border-border text-text-dim"}`}>
+                className={`flex items-center justify-between px-3 py-2 rounded-lg border text-xs ${ep.found ? "bg-green-subtle border-green/30 text-green" : "bg-surface-2 border-white/5 text-text-dim"}`}>
                 <span className="font-medium">{ep.label}</span>
                 {ep.found ? <CheckCircle size={14} /> : <XCircle size={14} />}
               </div>
@@ -324,7 +366,7 @@ export default function LogicModule({ host, targetId, onBack }) {
                 <button onClick={() => setAiSuggestions(null)} className="text-text-dim hover:text-text p-0.5"><X size={12} /></button>
               </div>
               {aiSuggestions.map((s, i) => (
-                <div key={i} className="text-xs text-text-dim border-b border-border/50 last:border-0 pb-2 last:pb-0">
+                <div key={i} className="text-xs text-text-dim border-b border-white/5 last:border-0 pb-2 last:pb-0">
                   <div className="font-medium text-text">{s.test}</div>
                   <div className="text-[11px] mt-0.5">{s.reason}</div>
                   {s.specific_url && <div className="text-[10px] font-mono text-accent mt-0.5">URL: {s.specific_url}</div>}
@@ -337,11 +379,11 @@ export default function LogicModule({ host, targetId, onBack }) {
             const state = tests[item.key] || {};
             return (
               <div key={item.key}
-                className={`border rounded-lg transition-colors ${state.done ? "border-green/30 bg-green-subtle/10" : "border-border bg-surface-2"}`}>
+                className={`border rounded-lg transition-colors ${state.done ? "border-green/30 bg-green-subtle/10" : "border-white/5 bg-surface-2"}`}>
                 <div className="flex items-start gap-3 p-3">
                   <input type="checkbox" checked={!!state.done}
                     onChange={() => toggleTest(item.key)}
-                    className="mt-0.5 accent-accent w-4 h-4 rounded border-border" />
+                    className="mt-0.5 accent-accent w-4 h-4 rounded border-white/5" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium text-text">{item.title}</span>
@@ -349,7 +391,7 @@ export default function LogicModule({ host, targetId, onBack }) {
                     </div>
                     <details className="mt-1.5">
                       <summary className="text-[11px] text-accent cursor-pointer hover:underline">View instructions</summary>
-                      <pre className="mt-2 text-[11px] text-text-dim bg-surface border border-border rounded-lg p-3 overflow-x-auto whitespace-pre-wrap font-mono">
+                      <pre className="mt-2 text-[11px] text-text-dim bg-surface border border-white/5 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap font-mono">
                         {item.instructions.replace(/\{host\}/g, host)}
                       </pre>
                     </details>
