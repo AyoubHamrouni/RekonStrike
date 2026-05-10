@@ -1,162 +1,146 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { Globe, Search, ArrowUpDown, ChevronLeft, ChevronRight, AlertTriangle, RefreshCw } from "lucide-react";
 import { fetchSubdomains } from "../api";
-import { Globe, Search, ChevronDown, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
+import EmptyState from "./ui/EmptyState";
+import ErrorState from "./ui/ErrorState";
+import { SkeletonTable } from "./ui/Skeleton";
 
 const PAGE_SIZE = 50;
 
-export default function SubdomainList({ data: initialData, targetId }) {
-  const [data, setData] = useState(initialData || { items: [], total: 0 });
-  const [search, setSearch] = useState("");
-  const [resolvedFilter, setResolvedFilter] = useState("all");
+export default function SubdomainList({ targetId }) {
+  const [data, setData] = useState({ items: [], total: 0 });
   const [page, setPage] = useState(0);
-  const [sortKey, setSortKey] = useState("subdomain");
-  const [sortDir, setSortDir] = useState("asc");
-  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState({ field: "", dir: "asc" });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const totalPages = Math.ceil(data.total / PAGE_SIZE);
 
-  useEffect(() => {
-    setData(initialData || { items: [], total: 0 });
-  }, [initialData]);
-
-  const loadPage = async (p, sort, dir) => {
+  const load = useCallback(() => {
     setLoading(true);
-    try {
-      const params = {
-        page: p, size: PAGE_SIZE,
-        sort: sort || sortKey, order: dir || sortDir,
-      };
-      if (search) params.search = search;
-      if (resolvedFilter !== "all") params.resolved = resolvedFilter === "yes" ? "true" : "false";
-      const result = await fetchSubdomains(targetId, params);
-      setData(result);
-    } catch {} finally { setLoading(false); }
-  };
-
-  const handleSearch = () => {
-    setPage(0);
-    loadPage(0);
-  };
-
-  const changePage = (delta) => {
-    const next = page + delta;
-    if (next >= 0 && next < Math.ceil((data.total || 0) / PAGE_SIZE)) {
-      setPage(next);
-      loadPage(next);
+    setError(null);
+    const params = { page, size: PAGE_SIZE };
+    if (search) params.search = search;
+    if (sort.field) {
+      params.sort = sort.field;
+      params.order = sort.dir;
     }
-  };
+    fetchSubdomains(targetId, params)
+      .then(setData)
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [targetId, page, search, sort]);
 
-  const toggleSort = (key) => {
-    const dir = sortKey === key && sortDir === "asc" ? "desc" : "asc";
-    setSortKey(key);
-    setSortDir(dir);
+  useEffect(load, [load]);
+
+  const handleSearch = useCallback((e) => {
+    const val = e.target.value;
+    setSearch(val);
     setPage(0);
-    loadPage(0, key, dir);
+  }, []);
+
+  const toggleSort = (field) => {
+    setSort((s) => ({ field, dir: s.field === field && s.dir === "asc" ? "desc" : "asc" }));
   };
 
-  const totalPages = Math.max(1, Math.ceil((data.total || 0) / PAGE_SIZE));
-  const items = data.items || [];
-
-  if (!data.total && !loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <Globe size={32} className="text-text-dim mb-3" />
-        <p className="text-sm text-text-dim">No subdomains found</p>
+  const SortHeader = ({ field, children }) => (
+    <th
+      className="px-5 py-3 text-left text-xs font-medium text-text-dim uppercase tracking-wider cursor-pointer hover:text-text select-none"
+      onClick={() => toggleSort(field)}
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggleSort(field); }}
+      aria-sort={sort.field === field ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        <ArrowUpDown size={11} className={sort.field === field ? "text-accent" : "opacity-30"} />
       </div>
-    );
+    </th>
+  );
+
+  if (error) {
+    return <ErrorState title="Failed to load subdomains" message={error} onRetry={load} />;
   }
 
   return (
-    <div>
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-xs">
+    <div className="bg-surface border border-border rounded-xl overflow-hidden">
+      <div className="px-5 py-3 border-b border-border flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-2 text-sm font-semibold text-text">
+          <Globe size={16} className="text-accent" />
+          Subdomains
+          {!loading && <span className="text-xs font-normal text-text-dim">({data.total})</span>}
+        </div>
+        <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-dim" />
           <input
-            placeholder="Search subdomains..."
+            type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="w-full pl-9 pr-3 py-2 bg-surface-2 border border-border rounded-lg text-sm text-text placeholder:text-text-dim/40 outline-none focus:border-accent transition-colors"
+            onChange={handleSearch}
+            placeholder="Search subdomains..."
+            className="w-56 pl-8 pr-3 py-1.5 bg-surface-2 border border-border rounded-lg text-xs text-text placeholder:text-text-dim/40 focus:outline-none focus:border-accent transition-colors"
+            aria-label="Search subdomains"
           />
         </div>
-        <select value={resolvedFilter} onChange={(e) => { setResolvedFilter(e.target.value); setPage(0); loadPage(0); }}
-          className="px-3 py-2 bg-surface-2 border border-border rounded-lg text-sm text-text outline-none focus:border-accent transition-colors">
-          <option value="all">All</option>
-          <option value="yes">Resolved</option>
-          <option value="no">Unresolved</option>
-        </select>
-        <span className="text-xs text-text-dim">{data.total} results</span>
       </div>
 
-      <div className="bg-surface border border-border rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th onClick={() => toggleSort("subdomain")}
-                  className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-text-dim font-medium cursor-pointer hover:text-text select-none">
-                  <div className="flex items-center gap-1">
-                    Subdomain
-                    <ArrowUpDown size={11} className={sortKey === "subdomain" ? "text-accent" : ""} />
-                  </div>
-                </th>
-                <th onClick={() => toggleSort("source")}
-                  className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-text-dim font-medium cursor-pointer hover:text-text select-none">
-                  <div className="flex items-center gap-1">
-                    Source
-                    <ArrowUpDown size={11} className={sortKey === "source" ? "text-accent" : ""} />
-                  </div>
-                </th>
-                <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-text-dim font-medium">
-                  IP Address
-                </th>
-                <th onClick={() => toggleSort("resolved")}
-                  className="text-left px-4 py-3 text-[10px] uppercase tracking-wider text-text-dim font-medium cursor-pointer hover:text-text select-none">
-                  <div className="flex items-center gap-1">
-                    Resolved
-                    <ArrowUpDown size={11} className={sortKey === "resolved" ? "text-accent" : ""} />
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {loading ? (
-                <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-text-dim text-sm">
-                    Loading...
-                  </td>
+      {loading ? (
+        <SkeletonTable rows={6} cols={4} />
+      ) : !data.items.length ? (
+        <EmptyState icon={Globe} title="No subdomains found"
+          message={search ? "Try a different search term." : "Run a passive reconnaissance scan to discover subdomains."} />
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full" role="table">
+              <thead>
+                <tr className="border-b border-border">
+                  <SortHeader field="subdomain">Subdomain</SortHeader>
+                  <SortHeader field="source">Source</SortHeader>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-text-dim uppercase tracking-wider">Resolved</th>
+                  <th className="px-5 py-3 text-right text-xs font-medium text-text-dim uppercase tracking-wider">First Seen</th>
                 </tr>
-              ) : items.map((s) => (
-                <tr key={s.id} className="hover:bg-surface-2 transition-colors">
-                  <td className="px-4 py-2.5 font-mono text-sm text-text">{s.subdomain}</td>
-                  <td className="px-4 py-2.5 text-xs text-text-dim">{s.source || "—"}</td>
-                  <td className="px-4 py-2.5 text-xs text-text-dim font-mono">{s.ip_address || "—"}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${
-                      s.resolved ? "bg-green/10 text-green" : "bg-surface-2 text-text-dim"
-                    }`}>
-                      {s.resolved ? "Yes" : "No"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {data.items.map((s, i) => (
+                  <tr key={s.id || i} className="hover:bg-surface-2 transition-colors animate-fade-in">
+                    <td className="px-5 py-2.5 text-sm text-text font-medium">{s.subdomain || s.name}</td>
+                    <td className="px-5 py-2.5 text-sm text-text-dim">{s.source || "—"}</td>
+                    <td className="px-5 py-2.5">
+                      {s.resolved !== undefined ? (
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${s.resolved ? "bg-green/10 text-green" : "bg-surface-2 text-text-dim"}`}>
+                          {s.resolved ? "Yes" : "No"}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-text-dim">—</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-2.5 text-sm text-text-dim text-right">
+                      {s.created_at ? new Date(s.created_at).toLocaleDateString() : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 mt-4">
-          <button onClick={() => changePage(-1)} disabled={page === 0}
-            className="p-2 rounded-lg bg-surface-2 border border-border hover:bg-border transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-            <ChevronLeft size={14} />
-          </button>
-          <span className="text-xs text-text-dim">
-            Page {page + 1} of {totalPages}
-          </span>
-          <button onClick={() => changePage(1)} disabled={page >= totalPages - 1}
-            className="p-2 rounded-lg bg-surface-2 border border-border hover:bg-border transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-            <ChevronRight size={14} />
-          </button>
-        </div>
+          {totalPages > 1 && (
+            <div className="px-5 py-3 border-t border-border flex items-center justify-between">
+              <span className="text-xs text-text-dim">
+                Page {page + 1} of {totalPages}
+              </span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}
+                  className="p-1.5 rounded hover:bg-surface-2 disabled:opacity-30 transition-colors" aria-label="Previous page">
+                  <ChevronLeft size={14} />
+                </button>
+                <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}
+                  className="p-1.5 rounded hover:bg-surface-2 disabled:opacity-30 transition-colors" aria-label="Next page">
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

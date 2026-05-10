@@ -1,277 +1,293 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Crosshair, ChevronRight, Info, Shield, Globe, Building2, Link as LinkIcon, Check, Target, HelpCircle, BookOpen } from "lucide-react";
+import {
+  Crosshair, Globe, Server, BookOpen, HelpCircle,
+  CheckCircle, Loader2, ChevronDown, ChevronUp, AlertTriangle, RefreshCw,
+} from "lucide-react";
+import { fetchPhases, startScan } from "../api";
 import toast from "react-hot-toast";
-import { startScan, fetchPhases } from "../api";
 
-const typeMeta = {
-  wildcard: { icon: Globe, desc: "Enumerate all subdomains under a wildcard domain", example: "*.example.com", learn: "Best for bug bounty programs that scope *.domain.com. The framework will find all subdomains, check which are alive, and scan for vulnerabilities." },
-  domain: { icon: LinkIcon, desc: "Scan a specific domain and its subdomains", example: "example.com", learn: "Use when you have a single domain target. Works great for penetration tests where you need deep coverage of one domain." },
-  company: { icon: Building2, desc: "Discover all domains owned by an organization", example: "Acme Inc", learn: "Enterprise-level recon. Uses ASN lookups, WHOIS records, and SecurityTrails API to find every domain a company owns. Requires API keys for best results." },
-  url: { icon: Shield, desc: "Probe a specific URL for vulnerabilities", example: "https://example.com/path", learn: "Quick vulnerability check on a specific URL. Skips subdomain discovery and goes straight to web probing and scanning." },
+const TARGET_TYPES = [
+  { value: "domain", label: "Domain", icon: Globe, desc: "Discover subdomains, crawl endpoints, and scan for vulnerabilities across the entire domain scope." },
+  { value: "ip", label: "IP Range", icon: Server, desc: "Scan IP ranges for open ports, services, and hosted web applications." },
+];
+
+const LEARN_TYPES = {
+  domain: "Best for bug bounty programs where you need to map the entire attack surface from a root domain. Starts with passive discovery and progressively deepens.",
+  ip: "Best for infrastructure assessments where you have a known IP range. Skips subdomain discovery and goes straight to port scanning.",
 };
 
-const phaseLearn = {
-  0: { what: "Validates the target domain and loads scope rules. Ensures you're scanning something valid before spending time on it.", why: "Prevents wasted scans on malformed inputs or out-of-scope targets. Always start here." },
-  1: { what: "Uses public OSINT sources (certificate transparency logs, search engines, GitHub) to find subdomains without ever touching the target's servers.", why: "Passive recon is stealthy and legal — you're just reading public data. This phase typically finds 80% of all subdomains." },
-  2: { what: "Takes the subdomains from Phase 1 and actively resolves them (DNS lookups), scans for open ports (Naabu), and checks for cloud assets (CloudEnum).", why: "Not all subdomains are alive. This phase separates what actually exists from what's historical or dangling." },
-  3: { what: "Makes HTTP requests to every live host to detect web servers, technologies (React, Nginx, Cloudflare), SSL certificates, and response headers.", why: "Understanding the tech stack tells you what vulnerabilities to look for. A React app needs different tests than a WordPress site." },
-  4: { what: "Crawls websites (GoSpider, Katana), fetches historical URLs (GAU), fuzzes for hidden paths (ffuf), and generates custom wordlists (CeWL).", why: "The biggest attacks come from hidden endpoints — admin panels, API docs, debug pages, backup files. You can't hack what you can't find." },
-  5: { what: "Runs 10,000+ Nuclei templates against discovered hosts to find CVEs, misconfigurations, exposed panels, and security gaps.", why: "Automates the most tedious part of hunting. Nuclei checks everything from critical RCEs to informational headers." },
-  6: { what: "Scores every finding (50+ signals) and presents a prioritized view of what to investigate first.", why: "Not all findings are equal. ROI scoring tells you which hosts are most likely to have a pay-out-worthy bug." },
+const LEARN_PHASES = {
+  0: "Validates the target and loads scope rules to ensure everything is configured correctly.",
+  1: "Searches public sources (certificate logs, search engines, GitHub) to discover subdomains without touching the target's servers.",
+  2: "Checks which subdomains actually resolve in DNS, what ports are open, and if any cloud assets exist.",
+  3: "Makes HTTP requests to every live host to identify web servers, technologies, and SSL certificates.",
+  4: "Crawls websites and fetches historical URLs to discover hidden endpoints, API routes, and JS files.",
+  5: "Runs Nuclei vulnerability templates against all discovered services to find CVEs and misconfigurations.",
+  6: "Calculates ROI scores and consolidates all findings into a prioritized report.",
+};
+
+const PHASE_NAMES = {
+  0: "Scope Validation",
+  1: "Passive Reconnaissance",
+  2: "Active Reconnaissance",
+  3: "Web Probing",
+  4: "Content Discovery",
+  5: "Vulnerability Scanning",
+  6: "ROI Reporting",
 };
 
 export default function NewScan() {
   const navigate = useNavigate();
   const [target, setTarget] = useState("");
-  const [targetType, setTargetType] = useState("wildcard");
+  const [targetType, setTargetType] = useState("domain");
   const [phases, setPhases] = useState([]);
-  const [selectedPhases, setSelectedPhases] = useState([]);
-  const [running, setRunning] = useState(false);
+  const [selectedPhases, setSelectedPhases] = useState(new Set());
+  const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
-  const [showLearn, setShowLearn] = useState(null);
-  const [showTypeLearn, setShowTypeLearn] = useState(null);
+  const [phasesLoading, setPhasesLoading] = useState(true);
+  const [phasesError, setPhasesError] = useState(null);
+  const [showLearn, setShowLearn] = useState({});
 
   useEffect(() => {
-    fetchPhases().then((p) => {
-      setPhases(p);
-      setSelectedPhases(p.map((x) => x.number));
-    }).catch(() => toast.error("Failed to load phases"));
+    setPhasesLoading(true);
+    setPhasesError(null);
+    fetchPhases()
+      .then((data) => {
+        setPhases(data);
+        setSelectedPhases(new Set(data.map((p) => p.id)));
+      })
+      .catch((err) => {
+        setPhasesError(err.message || "Failed to load phases");
+        toast.error("Failed to load phases");
+      })
+      .finally(() => setPhasesLoading(false));
   }, []);
 
-  const validate = () => {
-    const e = {};
-    if (!target.trim()) e.target = "Target is required";
-    else if (targetType === "wildcard" && !target.includes(".")) e.target = "Enter a valid domain (e.g., example.com)";
-    else if (targetType === "url" && !target.startsWith("http")) e.target = "Enter a valid URL starting with https://";
-    setErrors(e);
-    return Object.keys(e).length === 0;
+  const validate = useCallback(() => {
+    const errs = {};
+    if (!target.trim()) errs.target = "Target is required";
+    if (targetType === "domain" && !/^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(target.trim())) {
+      errs.target = "Enter a valid domain (e.g., example.com)";
+    }
+    if (selectedPhases.size === 0) errs.phases = "Select at least one phase";
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  }, [target, targetType, selectedPhases]);
+
+  const handleSubmit = useCallback(async () => {
+    if (!validate()) return;
+    setSubmitting(true);
+    try {
+      const result = await startScan(target.trim(), targetType, Array.from(selectedPhases));
+      toast.success("Scan started");
+      navigate(`/scan/${result.session_id || result.id}`);
+    } catch (err) {
+      toast.error(err.message || "Failed to start scan");
+    } finally {
+      setSubmitting(false);
+    }
+  }, [target, targetType, selectedPhases, validate, navigate]);
+
+  const togglePhase = (phaseId) => {
+    setSelectedPhases((prev) => {
+      const next = new Set(prev);
+      if (next.has(phaseId)) next.delete(phaseId); else next.add(phaseId);
+      return next;
+    });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!validate() || running) return;
-    setRunning(true);
-    try {
-      const result = await startScan(target.trim(), targetType, selectedPhases);
-      toast.success("Scan started successfully");
-      navigate(`/scan/${result.session_id}`);
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setRunning(false);
+  const toggleAll = () => {
+    if (selectedPhases.size === phases.length) {
+      setSelectedPhases(new Set());
+    } else {
+      setSelectedPhases(new Set(phases.map((p) => p.id)));
     }
   };
 
-  const togglePhase = (num) => {
-    setSelectedPhases((prev) =>
-      prev.includes(num) ? prev.filter((p) => p !== num) : [...prev, num]
-    );
-  };
-
-  const selectAllPhases = () => setSelectedPhases(phases.map((p) => p.number));
-  const deselectAllPhases = () => setSelectedPhases([]);
-
-  const TypeIcon = typeMeta[targetType].icon;
-
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-2.5 rounded-xl bg-accent-subtle">
-          <Crosshair size={20} className="text-accent" />
-        </div>
+    <div className="max-w-3xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-xl font-bold text-text">New Reconnaissance Scan</h1>
+        <p className="text-sm text-text-dim mt-1">Configure and launch a new security assessment</p>
+      </div>
+
+      {/* Target & Type */}
+      <div className="bg-surface border border-border rounded-xl p-5 space-y-5">
         <div>
-          <h1 className="text-xl font-bold text-text">New Scan</h1>
-          <p className="text-sm text-text-dim mt-0.5">Configure and launch a reconnaissance scan</p>
+          <label htmlFor="target-input" className="text-xs font-medium text-text-dim mb-1.5 block">
+            Target
+          </label>
+          <input
+            id="target-input"
+            type="text"
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            placeholder={targetType === "domain" ? "example.com" : "192.168.1.0/24"}
+            className={`w-full px-3 py-2 bg-surface-2 border rounded-lg text-sm text-text placeholder:text-text-dim/40 focus:outline-none focus:border-accent transition-colors ${
+              errors.target ? "border-red" : "border-border"
+            }`}
+            aria-invalid={!!errors.target}
+            aria-describedby={errors.target ? "target-error" : undefined}
+          />
+          {errors.target && (
+            <p id="target-error" className="text-xs text-red mt-1 flex items-center gap-1">
+              <AlertTriangle size={11} /> {errors.target}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <label className="text-xs font-medium text-text-dim mb-2 block">Target Type</label>
+          <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Target type">
+            {TARGET_TYPES.map(({ value, label, icon: Icon, desc }) => (
+              <button
+                key={value}
+                onClick={() => setTargetType(value)}
+                role="radio"
+                aria-checked={targetType === value}
+                className={`text-left p-3 rounded-lg border transition-all ${
+                  targetType === value
+                    ? "bg-accent-subtle border-accent"
+                    : "bg-surface-2 border-border hover:border-border-light"
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <Icon size={16} className={targetType === value ? "text-accent" : "text-text-dim"} />
+                  <span className={`text-sm font-medium ${targetType === value ? "text-accent" : "text-text"}`}>{label}</span>
+                  {targetType === value && <CheckCircle size={14} className="ml-auto text-accent" />}
+                </div>
+                <p className="text-xs text-text-dim leading-relaxed">{desc}</p>
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setShowLearn((s) => ({ ...s, types: !s.types }))}
+            className="flex items-center gap-1 text-xs text-accent hover:text-accent-hover mt-2 transition-colors"
+            type="button"
+          >
+            <HelpCircle size={11} />
+            {showLearn.types ? "Hide explanation" : "Which one should I choose?"}
+            {showLearn.types ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+          {showLearn.types && (
+            <div className="mt-2 p-3 rounded-lg bg-accent-subtle/30 border border-accent/20 text-xs text-text-dim leading-relaxed animate-fade-in">
+              <strong className="text-text">{targetType === "domain" ? "Domain" : "IP Range"}:</strong>{" "}
+              {LEARN_TYPES[targetType]}
+            </div>
+          )}
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-surface border border-border rounded-xl p-5 space-y-5">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-text flex items-center gap-2">
-              <Target className="text-accent" size={16} />
-              Target Type
-            </h2>
-            <a href="#learn-types" onClick={(e) => { e.preventDefault(); setShowTypeLearn(showTypeLearn ? null : targetType); }}
-              className="flex items-center gap-1 text-xs text-accent hover:text-accent-hover transition-colors">
-              <BookOpen size={12} />
-              Which one should I choose?
-            </a>
-          </div>
+      {/* Phases */}
+      <div className="bg-surface border border-border rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-text">Phases</h2>
+          {!phasesLoading && !phasesError && (
+            <button
+              onClick={toggleAll}
+              className="text-xs text-accent hover:text-accent-hover transition-colors"
+              type="button"
+            >
+              {selectedPhases.size === phases.length ? "Clear All" : "Select All"}
+            </button>
+          )}
+        </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-            {Object.entries(typeMeta).map(([key, meta]) => {
-              const Icon = meta.icon;
-              const active = targetType === key;
-              return (
-                <button key={key} type="button" onClick={() => { setTargetType(key); setErrors({}); setShowLearn(null); setShowTypeLearn(null); }}
-                  className={`
-                    flex flex-col items-center gap-1.5 p-3 rounded-xl text-xs font-medium
-                    transition-all duration-150 border relative
-                    ${active
-                      ? "border-accent bg-accent-subtle text-accent"
-                      : "border-border bg-transparent text-text-dim hover:text-text hover:bg-surface-2"
-                    }
-                  `}>
-                  <Icon size={18} />
-                  <span className="capitalize">{key}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {showTypeLearn && typeMeta[showTypeLearn] && (
-            <div className="bg-accent-subtle/50 border border-accent/20 rounded-lg p-4 animate-fade-in">
-              <div className="flex items-start gap-3">
-                <BookOpen size={16} className="text-accent mt-0.5 shrink-0" />
-                <div>
-                  <h4 className="text-sm font-semibold text-text mb-1">
-                    {showTypeLearn.charAt(0).toUpperCase() + showTypeLearn.slice(1)} Workflow
-                  </h4>
-                  <p className="text-xs text-text-dim leading-relaxed">{typeMeta[showTypeLearn].learn}</p>
+        {phasesLoading ? (
+          <div className="space-y-3">
+            {[...Array(7)].map((_, i) => (
+              <div key={i} className="flex items-center gap-3 p-3">
+                <div className="skeleton w-5 h-5 rounded shrink-0" />
+                <div className="flex-1 space-y-1">
+                  <div className="skeleton h-4 w-40 rounded" />
+                  <div className="skeleton h-3 w-64 rounded" />
                 </div>
               </div>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-medium text-text-dim mb-1.5">
-              Target
-            </label>
-            <div className="relative">
-              <input
-                value={target}
-                onChange={(e) => { setTarget(e.target.value); setErrors({}); }}
-                placeholder={typeMeta[targetType].example}
-                className={`
-                  w-full px-3.5 py-2.5 bg-bg border rounded-lg text-sm text-text
-                  placeholder:text-text-dim/40 outline-none transition-colors font-mono
-                  ${errors.target ? "border-red" : "border-border focus:border-accent"}
-                `}
-                autoFocus
-              />
-            </div>
-            {errors.target && <p className="text-xs text-red mt-1.5">{errors.target}</p>}
-            <p className="text-xs text-text-dim/60 mt-1.5">{typeMeta[targetType].desc}</p>
+            ))}
           </div>
-        </div>
-
-        <div className="bg-surface border border-border rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ChevronRight className="text-accent" size={16} />
-              <h2 className="text-sm font-semibold text-text">Phases</h2>
-            </div>
-            <div className="flex items-center gap-3">
-              <button type="button" onClick={selectAllPhases}
-                className="text-xs text-accent hover:text-accent-hover transition-colors">
-                Select All
-              </button>
-              <button type="button" onClick={deselectAllPhases}
-                className="text-xs text-text-dim hover:text-text transition-colors">
-                Clear
-              </button>
-            </div>
+        ) : phasesError ? (
+          <div className="flex flex-col items-center py-8 text-center">
+            <AlertTriangle size={20} className="text-red mb-2" />
+            <p className="text-sm text-text-dim mb-3">Failed to load phases</p>
+            <button
+              onClick={() => {
+                setPhasesLoading(true);
+                setPhasesError(null);
+                fetchPhases()
+                  .then((data) => { setPhases(data); setSelectedPhases(new Set(data.map((p) => p.id))); })
+                  .catch((err) => setPhasesError(err.message))
+                  .finally(() => setPhasesLoading(false));
+              }}
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-2 hover:bg-border text-text rounded-lg text-xs font-medium transition-colors"
+            >
+              <RefreshCw size={12} /> Retry
+            </button>
           </div>
-
-          <p className="text-xs text-text-dim/60 leading-relaxed">
-            Each phase builds on the previous one. Start with all phases for a complete recon.
-            Deselect phases you've already run to save time on repeated scans.
-          </p>
-
-          <div className="space-y-2">
-            {phases.map((p) => {
-              const selected = selectedPhases.includes(p.number);
-              const learning = phaseLearn[p.number];
-              const expanded = showLearn === p.number;
-              return (
-                <div key={p.number}
-                  className={`
-                    rounded-lg border transition-all duration-150
-                    ${selected ? "bg-accent-subtle/30 border-accent/20" : "bg-transparent border-transparent"}
-                  `}>
-                  <div className="flex items-start gap-3 p-3">
-                    <button type="button" onClick={() => togglePhase(p.number)}
-                      className={`
-                        w-5 h-5 rounded-md flex items-center justify-center shrink-0 mt-0.5
-                        transition-colors duration-150 cursor-pointer border
-                        ${selected ? "bg-accent text-white border-accent" : "bg-transparent border-border hover:border-accent"}
-                      `}>
-                      {selected && <Check size={12} />}
-                    </button>
+        ) : phases.length === 0 ? (
+          <p className="text-sm text-text-dim py-4 text-center">No phases available</p>
+        ) : (
+          <>
+            <div className="space-y-1" role="group" aria-label="Scan phases">
+              {phases.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => togglePhase(p.id)}
+                  role="checkbox"
+                  aria-checked={selectedPhases.has(p.id)}
+                  className={`w-full text-left p-3 rounded-lg border transition-all ${
+                    selectedPhases.has(p.id)
+                      ? "bg-accent-subtle border-accent/30"
+                      : "bg-surface-2 border-border hover:border-border-light"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
+                      selectedPhases.has(p.id)
+                        ? "bg-accent text-white"
+                        : "bg-surface border border-border"
+                    }`}>
+                      {selectedPhases.has(p.id) && <CheckCircle size={12} />}
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-medium ${selected ? "text-text" : "text-text-dim"}`}>
-                          Phase {p.number}: {p.name}
-                        </span>
+                      <div className="text-sm font-medium text-text">
+                        Phase {p.number || p.id}: {p.name || PHASE_NAMES[p.id] || `Phase ${p.id}`}
                       </div>
-                      <p className="text-xs text-text-dim/70 mt-0.5">{p.description}</p>
-                      {selected && learning && (
-                        <div className="mt-2 space-y-1">
-                          <div className="flex items-start gap-1.5">
-                            <HelpCircle size={11} className="text-accent mt-0.5 shrink-0" />
-                            <p className="text-[11px] text-text-dim/80 leading-relaxed">{learning.what}</p>
-                          </div>
-                          <div className="flex items-start gap-1.5">
-                            <BookOpen size={11} className="text-yellow mt-0.5 shrink-0" />
-                            <p className="text-[11px] text-yellow/70 leading-relaxed">{learning.why}</p>
-                          </div>
-                        </div>
-                      )}
+                      <p className="text-xs text-text-dim mt-0.5 leading-relaxed">
+                        {p.description || LEARN_PHASES[p.id] || ""}
+                      </p>
                     </div>
-                    <button type="button" onClick={() => setShowLearn(expanded ? null : p.number)}
-                      className="p-1 rounded hover:bg-surface-2 text-text-dim hover:text-text transition-colors shrink-0">
-                      <Info size={14} />
-                    </button>
                   </div>
-                  {expanded && learning && (
-                    <div className="px-3 pb-3 animate-fade-in">
-                      <div className="ml-8 p-3 rounded-lg bg-surface-2 border border-border">
-                        <h4 className="text-xs font-semibold text-text mb-2 flex items-center gap-1.5">
-                          <BookOpen size={12} className="text-accent" />
-                          What's happening here?
-                        </h4>
-                        <p className="text-[11px] text-text-dim/80 leading-relaxed mb-2">{learning.what}</p>
-                        <h4 className="text-xs font-semibold text-text mb-2 flex items-center gap-1.5">
-                          <Crosshair size={12} className="text-yellow" />
-                          Why does it matter?
-                        </h4>
-                        <p className="text-[11px] text-yellow/70 leading-relaxed">{learning.why}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                </button>
+              ))}
+            </div>
+            {errors.phases && (
+              <p className="text-xs text-red mt-2 flex items-center gap-1">
+                <AlertTriangle size={11} /> {errors.phases}
+              </p>
+            )}
+          </>
+        )}
+      </div>
 
-        <button
-          type="submit"
-          disabled={running || selectedPhases.length === 0}
-          className={`
-            w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold
-            transition-all duration-150
-            ${running || selectedPhases.length === 0
-              ? "bg-border text-text-dim cursor-not-allowed"
-              : "bg-accent hover:bg-accent-hover text-white shadow-lg shadow-accent/20"
-            }
-          `}
-        >
-          {running ? (
-            <>
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Starting Scan...
-            </>
-          ) : (
-            <>
-              <Crosshair size={16} />
-              Launch Scan ({selectedPhases.length} phase{selectedPhases.length !== 1 ? "s" : ""})
-            </>
-          )}
-        </button>
-      </form>
+      {/* Submit */}
+      <button
+        onClick={handleSubmit}
+        disabled={submitting || phasesLoading}
+        className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-accent hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
+      >
+        {submitting ? (
+          <>
+            <Loader2 size={16} className="animate-spin" />
+            Starting Scan...
+          </>
+        ) : (
+          <>
+            <Crosshair size={16} />
+            Start Scan
+          </>
+        )}
+      </button>
     </div>
   );
 }

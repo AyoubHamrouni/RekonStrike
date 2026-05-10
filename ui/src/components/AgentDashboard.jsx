@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { fetchTargets, startAgentSession, sendAgentFeedback, connectAgentSSE } from "../api";
 import toast from "react-hot-toast";
+import ErrorState from "./ui/ErrorState";
 
 const PHASE_LABELS = {
   phase_0_validate: "Scope Validation",
@@ -342,6 +343,8 @@ function CompletionBanner({ status, guidance, onReset }) {
 export default function AgentDashboard() {
   const { targetId } = useParams();
   const [targets, setTargets] = useState([]);
+  const [targetsLoading, setTargetsLoading] = useState(true);
+  const [targetsError, setTargetsError] = useState(null);
   const [selectedTargetId, setSelectedTargetId] = useState(targetId || "");
   const [goal, setGoal] = useState("find all vulnerabilities");
   const [sessionId, setSessionId] = useState(null);
@@ -359,9 +362,12 @@ export default function AgentDashboard() {
 
   // Fetch targets for the selector
   useEffect(() => {
+    setTargetsLoading(true);
+    setTargetsError(null);
     fetchTargets()
       .then(setTargets)
-      .catch(() => toast.error("Failed to load targets"));
+      .catch((err) => setTargetsError(err.message))
+      .finally(() => setTargetsLoading(false));
   }, []);
 
   // Cleanup on unmount
@@ -504,6 +510,9 @@ export default function AgentDashboard() {
       {/* Target selector / config (shown when idle) */}
       {status === "idle" && (
         <div className="bg-surface border border-border rounded-xl p-5 animate-fade-in">
+          {targetsError ? (
+            <ErrorState title="Failed to load targets" message={targetsError} onRetry={() => window.location.reload()} />
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="text-xs font-medium text-text-dim mb-1.5 block">Target</label>
@@ -513,7 +522,9 @@ export default function AgentDashboard() {
                 className="w-full px-3 py-2 bg-surface-2 border border-border rounded-lg text-sm text-text focus:outline-none focus:border-accent transition-colors appearance-none cursor-pointer"
               >
                 <option value="">Select a target...</option>
-                {targets.map((t) => (
+                {targetsLoading ? (
+                  <option disabled>Loading...</option>
+                ) : targets.map((t) => (
                   <option key={t.id} value={t.id}>{t.target}</option>
                 ))}
               </select>
@@ -538,6 +549,7 @@ export default function AgentDashboard() {
               </button>
             </div>
           </div>
+          )}
         </div>
       )}
 

@@ -6,6 +6,8 @@ import {
   ChevronRight, ArrowRight, BookOpen, HelpCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import ErrorState from "./ui/ErrorState";
+import { SkeletonCard } from "./ui/Skeleton";
 
 const PHASE_NAMES = {
   0: "Scope Validation",
@@ -204,15 +206,20 @@ export default function ScanProgress() {
   const { sessionId } = useParams();
   const [events, setEvents] = useState([]);
   const [session, setSession] = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [sessionError, setSessionError] = useState(null);
   const [completed, setCompleted] = useState(false);
   const [currentPhase, setCurrentPhase] = useState(null);
   const [completedPhases, setCompletedPhases] = useState(new Set());
   const [failedPhases, setFailedPhases] = useState(new Set());
 
   useEffect(() => {
+    setSessionLoading(true);
+    setSessionError(null);
     fetchSession(Number(sessionId))
       .then(setSession)
-      .catch(() => toast.error("Failed to load session"));
+      .catch((err) => setSessionError(err.message))
+      .finally(() => setSessionLoading(false));
 
     const ws = connectWs(Number(sessionId), (event, data) => {
       setEvents((prev) => [...prev, { event, data, time: new Date().toLocaleTimeString() }]);
@@ -242,16 +249,26 @@ export default function ScanProgress() {
     return () => ws.close();
   }, [sessionId]);
 
+  if (sessionError) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <ErrorState title="Failed to load session" message={sessionError} onRetry={() => window.location.reload()} />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-text">Scan #{sessionId}</h1>
-          {session && (
+          {sessionLoading ? (
+            <div className="skeleton h-4 w-64 mt-2" />
+          ) : session ? (
             <p className="text-sm text-text-dim mt-0.5">
               {session.workflow} scan · Started {session.started_at ? new Date(session.started_at).toLocaleString() : "—"}
             </p>
-          )}
+          ) : null}
         </div>
         {completed && (
           <Link to="/" className="inline-flex items-center gap-2 px-4 py-2 bg-surface-2 hover:bg-border text-text rounded-lg text-sm font-medium transition-colors">
@@ -261,7 +278,11 @@ export default function ScanProgress() {
         )}
       </div>
 
-      {session?.stats && <StatsPanel session={session} />}
+      {sessionLoading ? (
+        <div className="grid grid-cols-4 gap-3">
+          {[...Array(4)].map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      ) : session?.stats && <StatsPanel session={session} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <PhaseTimeline

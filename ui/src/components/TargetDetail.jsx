@@ -100,7 +100,6 @@ export default function TargetDetail() {
   const [showTracker, setShowTracker] = useState(false);
   const [showAI, setShowAI] = useState(false);
   const [hasProgramScope, setHasProgramScope] = useState(false);
-  const [data, setData] = useState({ subdomains: { items: [], total: 0 }, hosts: { items: [], total: 0 }, vulns: { items: [], total: 0 }, endpoints: { items: [], total: 0 } });
 
   const load = useCallback(() => {
     setLoading(true);
@@ -115,36 +114,15 @@ export default function TargetDetail() {
     }).catch(() => toast.error("Failed to load target")).finally(() => setLoading(false));
   }, [id]);
 
-  const loadTabData = useCallback(async (tabKey) => {
-    try {
-      const params = { size: 500 };
-      const fetchers = {
-        subdomains: () => fetchSubdomains(id, { size: 500 }),
-        hosts: () => fetchLiveHosts(id, { size: 200 }),
-        vulns: () => fetchVulnerabilities(id, { size: 200 }),
-        endpoints: () => fetchEndpoints(id, { size: 200 }),
-      };
-      const fn = fetchers[tabKey];
-      if (fn) {
-        const r = await fn();
-        setData((prev) => ({ ...prev, [tabKey]: r }));
-      }
-    } catch (e) {
-      toast.error(`Failed to load ${tabKey}`);
-    }
-  }, [id]);
-
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { if (target) loadTabData(tab); }, [tab, target, loadTabData]);
 
   useEffect(() => {
     if (!stats || !stats.sessions) return;
     const interval = setInterval(() => {
       fetchStats(id).then(setStats).catch(() => {});
-      loadTabData(tab);
     }, 10000);
     return () => clearInterval(interval);
-  }, [stats, id, tab, loadTabData]);
+  }, [stats, id]);
 
   if (loading && !target) {
     return (
@@ -346,10 +324,10 @@ export default function TargetDetail() {
       )}
 
       <div className="animate-fade-in">
-        {tab === "subdomains" && <SubdomainList data={data.subdomains} targetId={id} />}
-        {tab === "hosts" && <LiveHostList data={data.hosts} targetId={id} />}
-        {tab === "vulns" && <VulnerabilityList data={data.vulns} targetId={id} />}
-        {tab === "endpoints" && <EndpointList data={data.endpoints} targetId={id} />}
+        {tab === "subdomains" && <SubdomainList targetId={id} />}
+        {tab === "hosts" && <LiveHostList targetId={id} />}
+        {tab === "vulns" && <VulnerabilityList targetId={id} />}
+        {tab === "endpoints" && <EndpointList targetId={id} />}
         {tab === "manual" && (
           <ManualWorkspace
             targetId={id}
