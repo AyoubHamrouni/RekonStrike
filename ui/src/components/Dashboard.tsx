@@ -1,530 +1,260 @@
-import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
-import {
-  Crosshair,
-  Target as TargetIcon,
-  Shield,
-  Globe,
-  ArrowRight,
-  Activity,
-  BarChart3,
-  Bot,
-} from "lucide-react";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-} from "recharts";
-import toast from "react-hot-toast";
-import StatCard from "./ui/StatCard";
-import EmptyState from "./ui/EmptyState";
-import ErrorState from "./ui/ErrorState";
-import { SkeletonCard, SkeletonTable } from "./ui/Skeleton";
-import { fetchTargets, fetchStats, fetchSessions } from "../api";
-import type { Target, Session, Stats } from "../types";
+import React, { useState, useEffect, useRef } from 'react';
+import { toast } from 'react-hot-toast';
+import { 
+  Play, 
+  RotateCcw, 
+  Terminal, 
+  Activity, 
+  ShieldCheck, 
+  Globe, 
+  Database,
+  Search,
+  ChevronDown
+} from 'lucide-react';
+import { Card, Badge, IconButton } from './ui/Shared';
 
-// ── SessionBadge ─────────────────────────────────────────────────────────
+/**
+ * INTELLIGENCE DASHBOARD
+ * Core operational view for RekonStrike
+ */
 
-const sessionBadgeStyles: Record<string, string> = {
-  running: "bg-green/10 text-green border-green/20",
-  completed: "bg-blue/10 text-blue border-blue/20",
-  failed: "bg-red/10 text-red border-red/20",
-  cancelled: "bg-yellow/10 text-yellow border-yellow/20",
-};
+export const Dashboard: React.FC = () => {
+  const [isRunning, setIsRunning] = useState(false);
+  const [activePhase, setActivePhase] = useState(1);
+  const [logs, setLogs] = useState<any[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-function SessionBadge({ status }: { status: string }) {
-  const s = sessionBadgeStyles[status] || "bg-surface-2 text-text-dim border-white/5";
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-medium border ${s}`}
-    >
-      {status === "running" && (
-        <span
-          className="w-1.5 h-1.5 rounded-full bg-green animate-pulse-dot"
-          aria-hidden="true"
-        />
-      )}
-      {status}
-    </span>
-  );
-}
-
-// ── VulnerabilityChart ───────────────────────────────────────────────────
-
-const severityColors: Record<string, string> = {
-  critical: "#e05a4f",
-  high: "#f0b429",
-  medium: "#4a9eff",
-  low: "#7c7e94",
-  info: "#00d4aa",
-};
-
-function VulnerabilityChart({
-  data,
-  loading,
-}: {
-  data: Record<string, number>;
-  loading: boolean;
-}) {
-  const pieData = Object.entries(data || {}).map(([name, value]) => ({
-    name,
-    value,
-    color: severityColors[name] || "#7c7e94",
-  }));
-
-  if (loading) {
-    return (
-      <div className="bg-surface border border-white/5 rounded-xl p-5">
-        <div className="skeleton h-4 w-44 rounded mb-4" />
-        <div className="flex items-center gap-6">
-          <div className="skeleton w-[140px] h-[140px] rounded-full shrink-0" />
-          <div className="space-y-2 flex-1">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="skeleton h-3 w-24 rounded" />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!pieData.length) {
-    return (
-      <div className="bg-surface border border-white/5 rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-text mb-4 flex items-center gap-2">
-          <BarChart3 size={16} className="text-accent" />
-          Vulnerability Distribution
-        </h3>
-        <div className="flex items-center justify-center py-8 text-text-dim text-xs">
-          No vulnerability data yet
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-surface border border-white/5 rounded-xl p-5 transition-all duration-200 hover:border-white/10">
-      <h3 className="text-sm font-semibold text-text mb-4 flex items-center gap-2">
-        <BarChart3 size={16} className="text-accent" />
-        Vulnerability Distribution
-      </h3>
-      <div className="flex items-center gap-6">
-        <div className="shrink-0">
-          <ResponsiveContainer width={140} height={140}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                innerRadius={35}
-                outerRadius={60}
-                paddingAngle={3}
-                dataKey="value"
-                stroke="none"
-              >
-                {pieData.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="space-y-1.5">
-          {pieData.map((d) => (
-            <div key={d.name} className="flex items-center gap-2 text-xs">
-              <div
-                className="w-2.5 h-2.5 rounded-full shrink-0"
-                style={{ background: d.color }}
-              />
-              <span className="text-text-dim capitalize">{d.name}</span>
-              <span className="font-medium text-text ml-auto">{d.value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── ScanActivityChart ────────────────────────────────────────────────────
-
-function ScanActivityChart({
-  sessions,
-  loading,
-}: {
-  sessions: Session[];
-  loading: boolean;
-}) {
-  if (loading) {
-    return (
-      <div className="bg-surface border border-white/5 rounded-xl p-5">
-        <div className="skeleton h-4 w-28 rounded mb-4" />
-        <div className="skeleton h-32 rounded" />
-      </div>
-    );
-  }
-
-  if (!sessions?.length) {
-    return (
-      <div className="bg-surface border border-white/5 rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-text mb-4 flex items-center gap-2">
-          <Activity size={16} className="text-accent" />
-          Scan Activity
-        </h3>
-        <div className="flex items-center justify-center py-8 text-text-dim text-xs">
-          No scans yet
-        </div>
-      </div>
-    );
-  }
-
-  const data = sessions.slice(0, 10).reverse();
-  const statusCounts: Record<string, number> = {};
-  sessions.forEach((s) => {
-    statusCounts[s.status] = (statusCounts[s.status] || 0) + 1;
-  });
-
-  const barFill = (status: string) => {
-    if (status === "completed") return "#00d4aa";
-    if (status === "failed") return "#e05a4f";
-    if (status === "running") return "#f0b429";
-    return "#7c7e94";
+  // Mock scan logic
+  const startScan = () => {
+    if (isRunning) return;
+    setIsRunning(true);
+    toast.success("Agent dispatched to example.com");
+    addLog('info', 'strategist', 'Target example.com verified. Initializing autonomous strategy...');
   };
 
-  return (
-    <div className="bg-surface border border-white/5 rounded-xl p-5 transition-all duration-200 hover:border-white/10">
-      <h3 className="text-sm font-semibold text-text mb-4 flex items-center gap-2">
-        <Activity size={16} className="text-accent" />
-        Scan Activity
-      </h3>
-      <div className="flex gap-4 mb-4 flex-wrap">
-        {Object.entries(statusCounts).map(([status, count]) => (
-          <div key={status} className="flex items-center gap-2 text-xs">
-            <span className="text-text-dim capitalize">{status}</span>
-            <span className="font-bold text-text">{count}</span>
-          </div>
-        ))}
-      </div>
-      <div className="h-32">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data}>
-            <XAxis dataKey="id" hide />
-            <YAxis hide />
-            <Tooltip
-              contentStyle={{
-                background: "#1a1b26",
-                border: "1px solid rgba(255,255,255,0.05)",
-                borderRadius: "8px",
-                fontSize: "12px",
-              }}
-              formatter={(_value, _name, props) => [
-                props.payload.status,
-                "Status",
-              ]}
-            />
-            <Bar dataKey="status" radius={[3, 3, 0, 0]}>
-              {data.map((entry) => (
-                <Cell key={entry.id} fill={barFill(entry.status)} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
+  const resetScan = () => {
+    setIsRunning(false);
+    setActivePhase(0);
+    setLogs([]);
+    toast("Pipeline reset", { icon: '🔄' });
+  };
 
-// ── Dashboard ────────────────────────────────────────────────────────────
-
-export default function Dashboard() {
-  const [targets, setTargets] = useState<Target[]>([]);
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [targetStats, setTargetStats] = useState<Record<number, Stats>>({});
-  const [statsLoading, setStatsLoading] = useState(false);
-
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    Promise.all([fetchTargets(), fetchSessions(20)])
-      .then(([ts, ss]) => {
-        setTargets(ts);
-        setSessions(ss);
-        if (ts.length > 0) {
-          setStatsLoading(true);
-          Promise.all(
-            ts.slice(0, 5).map((t) =>
-              fetchStats(t.id).then((s) => ({ id: t.id, ...s })).catch(() => null)
-            )
-          )
-            .then((statsArr) => {
-              const m: Record<number, Stats> = {};
-              statsArr.forEach((s) => {
-                if (s) m[s.id] = s;
-              });
-              setTargetStats(m);
-            })
-            .finally(() => setStatsLoading(false));
-        }
-      })
-      .catch((err: Error) => {
-        setError(err.message || "Failed to load dashboard data");
-        toast.error("Failed to load dashboard data");
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const addLog = (type: string, source: string, message: string) => {
+    const time = new Date().toLocaleTimeString([], { hour12: false });
+    setLogs(prev => [...prev, { id: Math.random(), time, type, source, message }]);
+  };
 
   useEffect(() => {
-    load();
-  }, [load]);
-
-  const totalSubs = Object.values(targetStats).reduce(
-    (a, b) => a + (b.subdomains || 0),
-    0
-  );
-  const totalLive = Object.values(targetStats).reduce(
-    (a, b) => a + (b.live_hosts || 0),
-    0
-  );
-  const totalVulns = Object.values(targetStats).reduce((a, b) => {
-    const v = b.vulnerabilities;
-    if (typeof v === "number") return a + v;
-    if (typeof v === "object") return a + Object.values(v).reduce((s, c) => s + c, 0);
-    return a;
-  }, 0);
-  const totalEndpoints = Object.values(targetStats).reduce(
-    (a, b) => a + (b.endpoints || 0),
-    0
-  );
-  const activeScans = sessions.filter((s) => s.status === "running").length;
-
-  const vulnDistribution: Record<string, number> = {};
-  Object.values(targetStats).forEach((s) => {
-    const v = s.vulnerabilities;
-    if (typeof v === "object") {
-      Object.entries(v).forEach(([sev, count]) => {
-        vulnDistribution[sev] = (vulnDistribution[sev] || 0) + count;
-      });
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  });
+  }, [logs]);
 
-  if (error) {
-    return (
-      <ErrorState title="Failed to load dashboard" message={error} onRetry={load} />
-    );
-  }
+  useEffect(() => {
+    if (isRunning && activePhase < 6) {
+      const timer = setTimeout(() => {
+        setActivePhase(prev => prev + 1);
+        const phases = ['Validate', 'Passive', 'Probe', 'Content', 'Vuln', 'ROI'];
+        addLog('success', 'executor', `Phase ${activePhase}: ${phases[activePhase]} completed successfully.`);
+      }, 3000);
+      return () => clearTimeout(timer);
+    } else if (activePhase === 6) {
+      setIsRunning(false);
+      addLog('purple', 'triager', 'Recon complete. Top ROI target identified: dev-api.example.com (9.8).');
+    }
+  }, [isRunning, activePhase]);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-text">Dashboard</h1>
-          <p className="text-sm text-text-dim mt-1">Attack surface overview</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            to="/agent"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-surface-2 hover:bg-border text-text rounded-lg text-sm font-medium transition-colors"
-          >
-            <Bot size={16} />
-            Agent
-          </Link>
-          <Link
-            to="/new"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors"
-          >
-            <Crosshair size={16} />
-            New Scan
-            <ArrowRight size={14} />
-          </Link>
+    <div className="space-y-6 animate-fade-in pb-12">
+      
+      {/* ── Automation Control ── */}
+      <div className="grid grid-cols-12 gap-6">
+        <Card 
+          className="col-span-12 lg:col-span-8" 
+          title="Autonomous Pipeline Execution"
+          action={
+            <div className="flex gap-2">
+              <IconButton 
+                icon={<RotateCcw size={14} />} 
+                onClick={resetScan}
+              />
+              <button 
+                onClick={startScan}
+                disabled={isRunning}
+                className={`flex items-center gap-2 px-4 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all ${
+                  isRunning ? 'bg-emerald-500/10 text-emerald-500 cursor-not-allowed border border-emerald-500/20' : 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-600/20'
+                }`}
+              >
+                {isRunning ? <Activity size={12} className="animate-pulse" /> : <Play size={12} fill="currentColor" />}
+                {isRunning ? 'Agent Active' : 'Dispatch Agent'}
+              </button>
+            </div>
+          }
+        >
+          <div className="flex items-center justify-between gap-2 py-4">
+            {['Validate', 'Passive', 'Probe', 'Content', 'Vuln', 'ROI'].map((name, i) => (
+              <React.Fragment key={name}>
+                <div className="flex flex-col items-center flex-1">
+                  <div className={`
+                    w-12 h-12 rounded-2xl border-2 flex items-center justify-center mb-2 transition-all duration-500 relative
+                    ${i < activePhase ? 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-600/30' : 
+                      i === activePhase && isRunning ? 'border-purple-600 text-purple-400 animate-pulse' : 
+                      'border-slate-800 text-slate-700'}
+                  `}>
+                    {i < activePhase ? <ShieldCheck size={20} /> : <span className="text-sm font-bold">{i}</span>}
+                    {i === activePhase && isRunning && (
+                       <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-600 rounded-full animate-ping" />
+                    )}
+                  </div>
+                  <span className={`text-[9px] font-black uppercase tracking-widest ${i === activePhase && isRunning ? 'text-purple-400' : 'text-slate-600'}`}>
+                    {name}
+                  </span>
+                </div>
+                {i < 5 && <div className={`h-[1px] w-full max-w-[30px] mt-6 transition-colors duration-500 ${i < activePhase ? 'bg-purple-600/50' : 'bg-slate-800'}`} />}
+              </React.Fragment>
+            ))}
+          </div>
+        </Card>
+
+        <div className="col-span-12 lg:col-span-4 grid grid-cols-2 gap-4">
+          {[
+            { label: 'Subdomains', val: '1,402', color: 'text-white' },
+            { label: 'Live Hosts', val: '128', color: 'text-white' },
+            { label: 'Findings', val: '12', color: 'text-rose-500' },
+            { label: 'Agent Score', val: '8.4', color: 'text-purple-400', border: 'border-l-2 border-l-purple-600' }
+          ].map(stat => (
+            <div key={stat.label} className={`bg-slate-900/50 border border-white/5 rounded-xl p-5 flex flex-col justify-between hover:bg-slate-900 transition-colors ${stat.border}`}>
+              <span className="text-[9px] uppercase text-slate-600 font-black tracking-widest">{stat.label}</span>
+              <span className={`text-2xl font-black ${stat.color}`}>{stat.val}</span>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Active scan banner */}
-      {activeScans > 0 && (
-        <div className="bg-green/5 border border-green/20 rounded-xl p-4 flex items-center gap-3 animate-fade-in">
-          <div className="relative">
-            <div className="w-3 h-3 rounded-full bg-green animate-pulse-dot" />
-          </div>
-          <div className="text-sm">
-            <span className="font-medium text-green">
-              {activeScans} scan{activeScans > 1 ? "s" : ""} running
-            </span>
-            <span className="text-text-dim ml-2">
-              — Results update in real-time
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* Stat cards: 4 columns */}
-      {loading ? (
-        <div className="grid grid-cols-4 gap-6">
-          {[...Array(4)].map((_, i) => (
-            <SkeletonCard key={i} lines={2} />
-          ))}
-        </div>
-      ) : targets.length > 0 ? (
-        <>
-          <div className="grid grid-cols-4 gap-6">
-            <StatCard
-              icon={Globe}
-              label="Total Subdomains"
-              value={totalSubs}
-              color="bg-accent-subtle"
-              loading={statsLoading}
-            />
-            <StatCard
-              icon={TargetIcon}
-              label="Live Hosts"
-              value={totalLive}
-              color="bg-green-subtle"
-              loading={statsLoading}
-            />
-            <StatCard
-              icon={Shield}
-              label="Vulnerabilities"
-              value={totalVulns}
-              color="bg-red-subtle"
-              loading={statsLoading}
-            />
-            <StatCard
-              icon={BarChart3}
-              label="Crawled Endpoints"
-              value={totalEndpoints}
-              color="bg-blue-subtle"
-              loading={statsLoading}
-            />
-          </div>
-
-          {/* Charts row: 2 columns */}
-          <div className="grid grid-cols-2 gap-6">
-            <VulnerabilityChart data={vulnDistribution} loading={statsLoading} />
-            <ScanActivityChart sessions={sessions} loading={loading} />
-          </div>
-
-          {/* Targets table */}
-          <div className="bg-surface border border-white/5 rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-text">Targets</h2>
-              <span className="text-xs text-text-dim">
-                {targets.length} total
-              </span>
-            </div>
-            <div className="divide-y divide-white/5">
-              {targets.map((t) => {
-                const s = targetStats[t.id];
-                return (
-                  <Link
-                    key={t.id}
-                    to={`/target/${t.id}`}
-                    className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.02] transition-colors group"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-text truncate">
-                          {t.target}
-                        </span>
-                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-2 text-text-dim font-medium shrink-0">
-                          {t.target_type}
-                        </span>
+      {/* ── Data Center ── */}
+      <div className="grid grid-cols-12 gap-6 items-stretch">
+        
+        {/* Asset Inventory */}
+        <Card className="col-span-12 xl:col-span-8" title="High ROI Surface Discovery">
+          <div className="overflow-x-auto -mx-5 -mb-5">
+            <table className="w-full text-left text-[11px] border-t border-white/5">
+              <thead className="bg-slate-950/40 text-slate-600 uppercase font-black tracking-widest text-[9px]">
+                <tr>
+                  <th className="px-5 py-4">Endpoint Identity</th>
+                  <th className="px-5 py-4">Technology Stack</th>
+                  <th className="px-5 py-4 text-center">Threat Status</th>
+                  <th className="px-5 py-4 text-right">ROI Index</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {[
+                  { host: 'api-gateway-01.example.com', ip: '192.168.1.10', tech: ['Django', 'NGINX'], status: 'danger', roi: 9.8 },
+                  { host: 'dev-portal.internal.example.com', ip: '10.0.5.22', tech: ['React', 'Node.js'], status: 'warning', roi: 9.2 },
+                  { host: 'admin.stage.example.com', ip: '192.168.4.101', tech: ['WordPress', 'PHP'], status: 'danger', roi: 8.9 },
+                  { host: 'monitoring.example.com', ip: '172.16.0.4', tech: ['Grafana', 'Prometheus'], status: 'default', roi: 7.4 },
+                  { host: 'assets.example.com', ip: 'CDN / Akamai', tech: ['Static', 'Cloud'], status: 'default', roi: 4.1 },
+                  { host: 'sso.example.com', ip: '192.168.1.5', tech: ['Java', 'Spring'], status: 'warning', roi: 8.2 }
+                ].map((item, i) => (
+                  <tr key={i} className="hover:bg-white/[0.03] transition-colors cursor-pointer group">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-1.5 h-1.5 rounded-full ${item.status === 'danger' ? 'bg-rose-500 animate-pulse' : item.status === 'warning' ? 'bg-amber-500' : 'bg-slate-700'}`} />
+                        <div className="flex flex-col">
+                          <span className="text-slate-200 font-bold group-hover:text-purple-400 transition-colors">{item.host}</span>
+                          <span className="text-[10px] text-slate-600 font-medium">{item.ip}</span>
+                        </div>
                       </div>
-                      <div className="text-xs text-text-dim mt-0.5">
-                        Added {t.created_at?.slice(0, 10)}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex gap-1.5">
+                        {item.tech.map(t => (
+                          <span key={t} className="px-2 py-0.5 bg-slate-800/80 rounded border border-white/5 text-[9px] text-slate-400">{t}</span>
+                        ))}
                       </div>
-                    </div>
-                    {s && (
-                      <div className="flex items-center gap-4 text-xs text-text-dim shrink-0">
-                        <span>{s.subdomains ?? "?"} subs</span>
-                        <span>{s.live_hosts ?? "?"} live</span>
-                        <span
-                          className={
-                            (typeof s.vulnerabilities === "number"
-                              ? s.vulnerabilities
-                              : 0) > 0
-                              ? "text-red"
-                              : ""
-                          }
-                        >
-                          {typeof s.vulnerabilities === "number"
-                            ? s.vulnerabilities
-                            : "?"}{" "}
-                          vulns
-                        </span>
-                      </div>
-                    )}
-                    <ArrowRight
-                      size={14}
-                      className="text-text-dim opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                    />
-                  </Link>
-                );
-              })}
-            </div>
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <Badge variant={item.status === 'danger' ? 'danger' : item.status === 'warning' ? 'warning' : 'default'}>
+                        {item.status === 'danger' ? 'Critical' : item.status === 'warning' ? 'Suspicious' : 'Passive'}
+                      </Badge>
+                    </td>
+                    <td className="px-5 py-4 text-right font-mono text-purple-400 font-black text-xs">{item.roi.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        </Card>
 
-          {/* Recent sessions */}
-          <div className="bg-surface border border-white/5 rounded-xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-text">Recent Scans</h2>
-              <span className="text-xs text-text-dim">
-                {sessions.length} total
-              </span>
+        {/* AI Guidance Log */}
+        <Card className="col-span-12 xl:col-span-4 flex flex-col" title="Strategist Intelligence Stream">
+          <div 
+            ref={scrollRef}
+            className="flex-1 bg-black/40 terminal-panel p-5 overflow-y-auto space-y-3 min-h-[400px] scroll-smooth"
+          >
+            {logs.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center text-center opacity-30 select-none">
+                <Terminal size={48} className="mb-4" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Awaiting Agent Dispatch</span>
+              </div>
+            )}
+            {logs.map((log) => (
+              <div key={log.id} className="flex gap-3 text-[11px] leading-relaxed animate-slide-in">
+                <span className="text-slate-700 shrink-0 select-none">[{log.time}]</span>
+                <span className={`shrink-0 font-black uppercase text-[9px] px-1 rounded-sm tracking-widest ${
+                  log.type === 'success' ? 'bg-emerald-500/10 text-emerald-500' : 
+                  log.type === 'error' ? 'bg-rose-500/10 text-rose-500' : 
+                  log.type === 'warning' ? 'bg-amber-500/10 text-amber-500' : 
+                  log.type === 'purple' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {log.source}
+                </span>
+                <span className="text-slate-300 font-medium">{log.message}</span>
+              </div>
+            ))}
+            {isRunning && <div className="animate-pulse inline-block w-2 h-4 bg-purple-600 translate-y-1" />}
+          </div>
+        </Card>
+      </div>
+
+      {/* ── Footprint Analytics ── */}
+      <div className="grid grid-cols-12 gap-6">
+         <Card className="col-span-12 lg:col-span-6" title="Infrastructure Proximity Mapping">
+            <div className="h-48 flex items-center justify-center bg-slate-950/40 rounded-xl relative overflow-hidden">
+               <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle,var(--color-purple-600)_1px,transparent_1px)] bg-[size:20px_20px]" />
+               <div className="flex flex-col items-center gap-4 animate-pulse">
+                  <Globe className="text-purple-600/50" size={32} />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-700">Generating Graph Topology...</span>
+               </div>
             </div>
-            <div className="divide-y divide-white/5">
-              {sessions.slice(0, 10).map((s) => (
-                <Link
-                  key={s.id}
-                  to={`/scan/${s.id}`}
-                  className="flex items-center gap-4 px-5 py-3 hover:bg-white/[0.02] transition-colors group"
+         </Card>
+         <Card className="col-span-12 lg:col-span-6" title="Vulnerability Severity Distribution">
+            <div className="h-48 flex items-end justify-between px-4 pb-2 pt-8 relative">
+               <div className="absolute top-4 left-4 flex gap-4">
+                  <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-rose-500" /><span className="text-[9px] font-bold text-slate-500">Critical</span></div>
+                  <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-amber-500" /><span className="text-[9px] font-bold text-slate-500">Medium</span></div>
+                  <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-slate-700" /><span className="text-[9px] font-bold text-slate-500">Low</span></div>
+               </div>
+               {[40, 65, 30, 90, 45, 75, 85, 50, 65, 95, 40, 60].map((h, i) => (
+                <div 
+                  key={i} 
+                  className={`flex-1 rounded-t-md transition-all duration-500 group relative border-t-2 ${
+                    h > 80 ? 'bg-rose-500/10 border-rose-500 hover:bg-rose-500/20' : 
+                    h > 50 ? 'bg-amber-500/10 border-amber-500 hover:bg-amber-500/20' : 
+                    'bg-slate-800 border-slate-700 hover:bg-slate-700'
+                  }`} 
+                  style={{ height: `${h}%`, margin: '0 2px' }}
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-text">
-                        Session #{s.id}
-                      </span>
-                      <SessionBadge status={s.status} />
-                    </div>
-                    <div className="text-xs text-text-dim mt-0.5">
-                      {s.started_at
-                        ? new Date(s.started_at).toLocaleString()
-                        : "—"}
-                      {s.current_phase && ` · Phase ${s.current_phase}`}
-                    </div>
+                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-800 text-[8px] px-1.5 py-0.5 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-white/5 font-bold">
+                    {h} Pts
                   </div>
-                  <ArrowRight
-                    size={14}
-                    className="text-text-dim opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                  />
-                </Link>
+                </div>
               ))}
             </div>
-          </div>
-        </>
-      ) : (
-        <EmptyState
-          icon={Crosshair}
-          title="No targets yet"
-          message="Start your first reconnaissance scan to discover subdomains, live hosts, and vulnerabilities."
-          action={
-            <Link
-              to="/new"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors"
-            >
-              <Crosshair size={16} />
-              Start Your First Scan
-            </Link>
-          }
-        />
-      )}
+         </Card>
+      </div>
+
     </div>
   );
-}
+};
+
+export default Dashboard;

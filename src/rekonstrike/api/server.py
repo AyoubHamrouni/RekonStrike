@@ -1,12 +1,13 @@
 import logging
-import os
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from rekonstrike.config import load_settings
-from rekonstrike.database import Database
+from rekonstrike.database import get_database
+from rekonstrike.tasks import get_task_manager
 from rekonstrike.api.routers.agent import router as agent_router
 
 # Configure logging
@@ -15,35 +16,30 @@ logger = logging.getLogger(__name__)
 
 # Initialize components
 settings = load_settings()
-db = Database(settings.database_url)
+db = get_database(settings.database_url)
+task_manager = get_task_manager(settings.redis_url, settings.model_dump(mode='json'))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Database migration on startup
+    # Validate database connectivity on startup
     try:
-        from alembic.config import Config
-        from alembic import command
-        # Locate alembic.ini (assuming it's in the project root)
-        ini_path = "alembic.ini"
-        if os.path.exists(ini_path):
-            alembic_cfg = Config(ini_path)
-            # Run upgrade head in a separate thread to avoid blocking the loop
-            # and to allow env.py to use asyncio.run()
-            await asyncio.to_thread(command.upgrade, alembic_cfg, "head")
-            logger.info("Alembic migrations completed.")
-        else:
-            logger.info("alembic.ini not found, creating tables directly.")
-            await db.create_all()
+        async with db.engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        logger.info("Database connectivity validated.")
+        await task_manager.start()
     except Exception as e:
-        logger.error(f"Migration error: {e}. Falling back to create_all.")
-        await db.create_all()
-    
+        logger.error(f"Database connectivity failure: {e}")
+        raise
+
     yield
-    
-    # Cleanup
+
+    await task_manager.close()
     await db.close()
 
 app = FastAPI(title="RekonStrike Backend", lifespan=lifespan)
+app.state.settings = settings
+app.state.db = db
+app.state.task_manager = task_manager
 
 # CORS Configuration
 app.add_middleware(

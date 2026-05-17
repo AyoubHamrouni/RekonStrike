@@ -1,10 +1,13 @@
 from datetime import datetime
+from functools import lru_cache
 from typing import Optional
 from sqlalchemy import (
     String, Boolean, Integer, ForeignKey, DateTime, Text, JSON, func, UniqueConstraint
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+
+from .config import load_settings
 
 
 class Base(DeclarativeBase):
@@ -241,3 +244,10 @@ class Database:
 
     async def close(self):
         await self.engine.dispose()
+
+
+@lru_cache(maxsize=2)
+def get_database(url: str | None = None) -> Database:
+    if not url:
+        url = load_settings().database_url
+    return Database(url)

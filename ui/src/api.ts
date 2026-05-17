@@ -14,9 +14,76 @@ import type {
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL || "";
+const CONFIGURED_PREFIX = import.meta.env.VITE_API_PREFIX || "";
+
+let resolvedPrefix: string | null = null;
+
+function normalizePrefix(prefix: string) {
+  const cleaned = prefix.trim().replace(/^\/+|\/+$/g, "");
+  return cleaned ? `/${cleaned}` : "";
+}
+
+function normalizePath(path: string) {
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+function joinUrl(...parts: string[]) {
+  return parts.reduce((acc, part) => {
+    if (!part) return acc;
+    const cleaned = part.replace(/^\/+|\/+$/g, "");
+    if (!acc) return `/${cleaned}`;
+    return `${acc.replace(/\/+$/g, "")}/${cleaned}`;
+  }, "");
+}
+
+function buildUrl(path: string, prefix: string) {
+  const url = joinUrl(BASE, prefix, normalizePath(path));
+  if (BASE && BASE.startsWith("http")) {
+    return url;
+  }
+  return url;
+}
+
+async function probeUrl(url: string) {
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveApiPrefix() {
+  if (resolvedPrefix !== null) return resolvedPrefix;
+
+  const candidates = Array.from(
+    new Set([
+      normalizePrefix(CONFIGURED_PREFIX),
+      "",
+      "/api",
+      "/api/v1",
+      "/v1",
+    ])
+  );
+
+  for (const prefix of candidates) {
+    const url = buildUrl("/health", prefix);
+    if (await probeUrl(url)) {
+      resolvedPrefix = prefix;
+      return resolvedPrefix;
+    }
+  }
+
+  resolvedPrefix = normalizePrefix(CONFIGURED_PREFIX);
+  return resolvedPrefix;
+}
 
 async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const r = await fetch(`${BASE}${path}`, opts);
+  const prefix = await resolveApiPrefix();
+  const r = await fetch(buildUrl(path, prefix), opts);
   if (!r.ok) {
     const err = await r.json().catch(() => ({ detail: r.statusText }));
     throw new Error(err.detail || `HTTP ${r.status}`);

@@ -64,7 +64,11 @@ def _parse_llm_json(content: str) -> dict:
         content = content.split("```json")[1].split("```")[0].strip()
     elif "```" in content:
         content = content.split("```")[1].split("```")[0].strip()
-    return json.loads(content)
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as e:
+        logger.error("Failed to parse LLM JSON response: %s", e)
+        raise ValueError("Invalid JSON response from LLM") from e
 
 
 def _phases_prompt_block(tried: list[str] | None = None) -> str:
@@ -298,12 +302,11 @@ def _stop(reason: str) -> dict:
 
 def route_from_strategy(state: ReconState) -> str:
     action = state.next_action
-    if action.startswith("phase_") or (action and action not in ("interrupt", "stop", "re_strategize")):
+    if action and action.startswith("phase_"):
         return "executor"
-    elif action == "interrupt":
+    if action == "interrupt":
         return "interrupt"
-    else:
-        return "stop"
+    return "stop"
 
 
 def route_from_executor(state: ReconState) -> str:
@@ -315,12 +318,11 @@ def route_from_triage(state: ReconState) -> str:
     action = state.next_action
     if action == "re_strategize":
         return "strategy"
-    elif action.startswith("phase_") or (action and action not in ("interrupt", "stop", "re_strategize")):
+    if action and action.startswith("phase_"):
         return "executor"
-    elif action == "interrupt":
+    if action == "interrupt":
         return "interrupt"
-    else:
-        return "stop"
+    return "stop"
 
 
 # ── Graph Builder ──────────────────────────────────────────────────────────

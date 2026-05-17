@@ -1,4 +1,5 @@
 import logging
+from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -7,6 +8,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        env_prefix="RS_",
         extra="ignore"
     )
 
@@ -43,6 +45,7 @@ class Settings(BaseSettings):
             providers.append("google")
         return providers
 
+@lru_cache(maxsize=1)
 def load_settings() -> Settings:
     settings = Settings()
 

@@ -2,8 +2,9 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
+from ..agent.runner import ReconAgentRunner
 from ..config import load_settings
-from ..database import Database
+from ..database import get_database
 from ..tasks import get_task_manager
 from ..repositories.target_repo import TargetRepository
 from ..repositories.session_repo import SessionRepository
@@ -11,7 +12,7 @@ from ..repositories.host_repo import HostRepository
 from ..services.scan_service import ScanService
 
 settings = load_settings()
-db = Database(settings.database_url)
+db = get_database(settings.database_url)
 
 security = HTTPBearer(auto_error=False)
 
@@ -48,7 +49,11 @@ def get_host_repo(session: AsyncSession = Depends(get_db_session)) -> HostReposi
 
 
 def get_tm():
-    return get_task_manager(settings.redis_url)
+    return get_task_manager(settings.redis_url, settings.model_dump(mode='json'))
+
+
+def get_agent_runner() -> ReconAgentRunner:
+    return ReconAgentRunner(settings=settings)
 
 
 def get_scan_service(

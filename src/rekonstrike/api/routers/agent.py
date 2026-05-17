@@ -3,14 +3,15 @@ import json
 import logging
 import time
 from typing import Optional, Dict, List, Any
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from ..deps import verify_auth, get_target_repo
+from ..deps import verify_auth, get_target_repo, get_agent_runner, get_session_repo
+from ...database import get_database
 from ...repositories.target_repo import TargetRepository
+from ...repositories.session_repo import SessionRepository
 from ...agent.runner import ReconAgentRunner
 
 logger = logging.getLogger(__name__)
@@ -22,8 +23,8 @@ router = APIRouter(prefix="/targets/{target_id}/agent", tags=["agent"])
 
 
 class AgentSession:
-    def __init__(self, target_id: int, target_domain: str):
-        self.session_id: str = str(uuid4())
+    def __init__(self, session_id: int, target_id: int, target_domain: str):
+        self.session_id: int = session_id
         self.target_id: int = target_id
         self.target_domain: str = target_domain
         self.status: str = "pending"
@@ -47,17 +48,17 @@ class AgentSession:
 
 class AgentSessionManager:
     def __init__(self):
-        self._sessions: dict[str, AgentSession] = {}
+        self._sessions: dict[int, AgentSession] = {}
 
-    def create(self, target_id: int, target_domain: str) -> AgentSession:
-        session = AgentSession(target_id, target_domain)
+    def create(self, session_id: int, target_id: int, target_domain: str) -> AgentSession:
+        session = AgentSession(session_id, target_id, target_domain)
         self._sessions[session.session_id] = session
         return session
 
-    def get(self, session_id: str) -> AgentSession | None:
+    def get(self, session_id: int) -> AgentSession | None:
         return self._sessions.get(session_id)
 
-    def remove(self, session_id: str):
+    def remove(self, session_id: int):
         self._sessions.pop(session_id, None)
 
 
@@ -76,7 +77,7 @@ class AgentRunRequest(BaseModel):
 
 
 class AgentSessionResponse(BaseModel):
-    session_id: str
+    session_id: int
     target_id: int
     target_domain: str
     status: str
@@ -89,7 +90,7 @@ class AgentFeedbackRequest(BaseModel):
 
 
 class AgentStateResponse(BaseModel):
-    session_id: str
+    session_id: int
     status: str
     target_domain: str
     phases_executed: List[str]
@@ -190,11 +191,21 @@ async def _run_agent_task(
     except asyncio.CancelledError:
         session.status = "interrupted"
         await session.event_queue.put(("complete", {"status": "interrupted"}))
+        async with get_database().get_session() as db_session:
+            repo = SessionRepository(db_session)
+            await repo.update_status(session.session_id, "interrupted")
     except Exception as e:
         logger.error(f"Agent task failed: {e}")
         session.status = "error"
         session.error = str(e)
         await session.event_queue.put(("complete", {"status": "error", "error": str(e)}))
+        async with get_database().get_session() as db_session:
+            repo = SessionRepository(db_session)
+            await repo.update_status(session.session_id, "error", error=str(e))
+    else:
+        async with get_database().get_session() as db_session:
+            repo = SessionRepository(db_session)
+            await repo.update_status(session.session_id, "completed")
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
@@ -206,12 +217,18 @@ async def run_agent(
     req: AgentRunRequest,
     auth: bool = Depends(verify_auth),
     repo: TargetRepository = Depends(get_target_repo),
+    session_repo: SessionRepository = Depends(get_session_repo),
+    runner: ReconAgentRunner = Depends(get_agent_runner),
 ):
     target = await repo.get_target(target_id)
     if not target:
         raise HTTPException(status_code=404, detail="Target not found")
 
-    runner = ReconAgentRunner()
+    scan_session = await session_repo.create_session(
+        target_id=target_id,
+        workflow="agent",
+        config_snapshot=req.model_dump(mode="json"),
+    )
 
     try:
         final_state = await runner.run_reconnaissance(
@@ -222,9 +239,16 @@ async def run_agent(
             program_handle=req.program_handle,
             max_steps=req.max_steps,
         )
+        status = "interrupted" if (final_state.next_action == "interrupt" or final_state.interrupt_reason) else "completed"
+        await session_repo.update_status(
+            scan_session.id,
+            status,
+            error=final_state.interrupt_reason if status != "completed" else None,
+        )
     except Exception as e:
+        await session_repo.update_status(scan_session.id, "error", error=str(e))
         return AgentRunResponse(
-            session_id="",
+            session_id=scan_session.id,
             status="error",
             target_domain=target.target,
             phases_executed=[],
@@ -239,10 +263,8 @@ async def run_agent(
             error=str(e),
         )
 
-    status = "interrupted" if (final_state.next_action == "interrupt" or final_state.interrupt_reason) else "completed"
-
     return AgentRunResponse(
-        session_id="",
+        session_id=scan_session.id,
         status=status,
         target_domain=final_state.target_domain,
         phases_executed=final_state.phases_tried,
@@ -264,13 +286,20 @@ async def start_agent_session(
     req: AgentRunRequest,
     auth: bool = Depends(verify_auth),
     repo: TargetRepository = Depends(get_target_repo),
+    session_repo: SessionRepository = Depends(get_session_repo),
+    runner: ReconAgentRunner = Depends(get_agent_runner),
 ):
     target = await repo.get_target(target_id)
     if not target:
         raise HTTPException(status_code=404, detail="Target not found")
 
-    session = _session_manager.create(target_id, target.target)
-    runner = ReconAgentRunner()
+    scan_session = await session_repo.create_session(
+        target_id=target_id,
+        workflow="agent",
+        config_snapshot=req.model_dump(mode="json"),
+    )
+
+    session = _session_manager.create(scan_session.id, target_id, target.target)
 
     session.task = asyncio.create_task(
         _run_agent_task(
@@ -297,7 +326,7 @@ async def start_agent_session(
 @router.get("/{session_id}/stream")
 async def stream_agent_events(
     target_id: int,
-    session_id: str,
+    session_id: int,
     request: Request,
     auth: bool = Depends(verify_auth),
 ):
@@ -349,7 +378,7 @@ async def stream_agent_events(
 @router.post("/{session_id}/feedback")
 async def send_agent_feedback(
     target_id: int,
-    session_id: str,
+    session_id: int,
     req: AgentFeedbackRequest,
     auth: bool = Depends(verify_auth),
 ):
@@ -367,7 +396,7 @@ async def send_agent_feedback(
 @router.get("/{session_id}/state", response_model=AgentStateResponse)
 async def get_agent_state(
     target_id: int,
-    session_id: str,
+    session_id: int,
     auth: bool = Depends(verify_auth),
 ):
     session = _session_manager.get(session_id)

@@ -7,6 +7,10 @@ export default defineConfig({
   server: {
     proxy: {
       "/health": "http://localhost:8000",
+      "/api": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
       "/phases": "http://localhost:8000",
       "/scan": "http://localhost:8000",
       "/targets": "http://localhost:8000",

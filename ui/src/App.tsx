@@ -1,176 +1,200 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
 import {
   LayoutDashboard,
-  Crosshair,
   Bot,
   Shield,
+  Search,
+  Zap,
+  Activity,
   ChevronRight,
+  User,
+  Settings,
+  Bell,
+  Command,
+  Plus,
+  ArrowRight
 } from "lucide-react";
 import Dashboard from "./components/Dashboard";
-import NewScan from "./components/NewScan";
-import TargetDetail from "./components/TargetDetail";
-import ScanProgress from "./components/ScanProgress";
-import AgentDashboard from "./components/AgentDashboard";
-import { fetchHealth } from "./api";
-import type { NavItem } from "./types";
 
-const navItems: NavItem[] = [
-  { path: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { path: "/agent", label: "Agent", icon: Bot },
-  { path: "/new", label: "New Scan", icon: Crosshair },
-];
+/**
+ * REKONSTRIKE MAIN APPLICATION SHELL
+ * Professional Fixed-Layout Desktop Architecture
+ */
 
-// ── NavLink ──────────────────────────────────────────────────────────────
+// --- Shared Components ---
 
-function NavLink({ item, location }: { item: NavItem; location: ReturnType<typeof useLocation> }) {
-  const active = item.end
-    ? location.pathname === item.path
-    : location.pathname.startsWith(item.path);
-  const Icon = item.icon;
-
-  return (
-    <Link
-      to={item.path}
-      aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-all duration-150 border-l-2 ${
-        active
-          ? "bg-accent/10 border-l-2 border-accent text-accent"
-          : "border-l-2 border-transparent text-text-dim hover:text-text hover:bg-white/[0.03]"
-      }`}
-    >
-      <Icon size={18} />
-      {item.label}
-      {active && <ChevronRight size={14} className="ml-auto opacity-50" />}
-    </Link>
-  );
-}
-
-// ── Sidebar ──────────────────────────────────────────────────────────────
-
-function Sidebar({ location }: { location: ReturnType<typeof useLocation> }) {
-  return (
-    <aside
-      className="w-64 shrink-0 overflow-y-auto bg-sidebar border-r border-white/5 flex flex-col"
-      aria-label="Main navigation"
-    >
-      <div className="h-14 flex items-center gap-3 px-5 border-b border-white/5 shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
-          <Shield size={16} className="text-white" />
-        </div>
-        <span className="font-bold text-lg tracking-tight text-text">
-          RekonStrike
-        </span>
+const NavItem: React.FC<{ to: string; icon: React.ReactNode; label: string; active?: boolean }> = ({ to, icon, label, active }) => (
+  <Link
+    to={to}
+    className={`flex items-center justify-between px-4 py-2 text-[11px] font-black uppercase tracking-widest rounded-lg transition-all duration-200 group ${
+      active 
+        ? 'bg-purple-600/10 text-purple-400 border border-purple-600/20 shadow-[0_0_15px_rgba(124,58,237,0.05)]' 
+        : 'text-slate-500 hover:text-slate-200 hover:bg-white/[0.03] border border-transparent'
+    }`}
+  >
+    <div className="flex items-center gap-3">
+      <div className={`transition-transform duration-300 ${active ? 'scale-110 text-purple-500' : 'group-hover:scale-110'}`}>
+        {icon}
       </div>
-
-      <nav className="flex-1 py-3 space-y-0.5">
-        {navItems.map((item) => (
-          <NavLink key={item.path} item={item} location={location} />
-        ))}
-      </nav>
-
-      <div className="p-4 border-t border-white/5 shrink-0">
-        <div className="flex items-center gap-2 text-xs text-text-dim">
-          <div className="w-1.5 h-1.5 rounded-full bg-green animate-pulse-dot" />
-          v0.2.0
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-// ── NotFound ─────────────────────────────────────────────────────────────
-
-function NotFound() {
-  return (
-    <div className="flex flex-col items-center justify-center py-24 text-center">
-      <div className="w-16 h-16 rounded-2xl bg-surface-2 border border-white/5 flex items-center justify-center mb-4">
-        <Shield size={28} className="text-text-dim" />
-      </div>
-      <h1 className="text-xl font-bold text-text mb-2">Page not found</h1>
-      <p className="text-sm text-text-dim mb-6">
-        The page you're looking for doesn't exist.
-      </p>
-      <Link
-        to="/"
-        className="inline-flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors"
-      >
-        <LayoutDashboard size={16} />
-        Back to Dashboard
-      </Link>
+      <span>{label}</span>
     </div>
-  );
-}
+    {active && <div className="w-1 h-1 rounded-full bg-purple-500 shadow-[0_0_8px_rgba(124,58,237,1)]" />}
+  </Link>
+);
 
-// ── AppShell ─────────────────────────────────────────────────────────────
+// --- Layout Wrapper ---
 
-function AppShell() {
+const AppShell: React.FC = () => {
   const location = useLocation();
-  const [healthy, setHealthy] = useState(true);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [selectedTarget, setSelectedTarget] = useState("example.com");
 
-  const checkHealth = useCallback(() => {
-    fetchHealth()
-      .then(() => setHealthy(true))
-      .catch(() => {
-        if (healthy) {
-          setHealthy(false);
-          toast.error("API server unreachable");
-        }
-      });
-  }, [healthy]);
-
+  // Keyboard shortcut listener
   useEffect(() => {
-    checkHealth();
-    const interval = setInterval(checkHealth, 15000);
-    return () => clearInterval(interval);
-  }, [checkHealth]);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        document.getElementById('global-search')?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bg">
-      <a href="#main-content" className="skip-link">
-        Skip to content
-      </a>
+    <div className="flex h-screen w-full bg-[#05060a] text-slate-200 overflow-hidden font-sans antialiased selection:bg-purple-500/30">
+      
+      {/* ── Fixed Sidebar ── */}
+      <aside className="w-64 bg-black border-r border-white/5 flex flex-col flex-shrink-0 z-20">
+        <div className="p-8">
+          <div className="flex items-center gap-3 mb-12">
+            <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center font-black text-white italic shadow-[0_0_20px_rgba(124,58,237,0.3)] transition-transform hover:scale-105 cursor-pointer">
+              <Shield size={22} strokeWidth={2.5} />
+            </div>
+            <div className="flex flex-col leading-none">
+              <h1 className="text-xl font-black tracking-tighter uppercase leading-tight">Rekon<span className="text-purple-600">Strike</span></h1>
+              <span className="text-[9px] text-slate-700 font-black uppercase tracking-[0.2em] mt-1">Advanced Recon</span>
+            </div>
+          </div>
+          
+          <div className="space-y-8">
+            <div className="space-y-1">
+              <NavItem to="/" icon={<LayoutDashboard size={16} />} label="Intelligence" active={location.pathname === "/"} />
+              <NavItem to="/agent" icon={<Bot size={16} />} label="Agent Node" active={location.pathname === "/agent"} />
+              <NavItem to="/assets" icon={<Activity size={16} />} label="Surface Area" active={location.pathname === "/assets"} />
+              <NavItem to="/scans" icon={<Zap size={16} />} label="Pipeline" active={location.pathname === "/scans"} />
+            </div>
 
-      <Sidebar location={location} />
+            <div className="space-y-3">
+               <div className="px-4 text-[9px] font-black uppercase tracking-[0.3em] text-slate-700">Infrastructure</div>
+               <nav className="space-y-1">
+                  <NavItem to="/settings" icon={<Settings size={16} />} label="System" active={location.pathname === "/settings"} />
+                  <NavItem to="/notifications" icon={<Bell size={16} />} label="Events" active={location.pathname === "/notifications"} />
+               </nav>
+            </div>
+          </div>
+        </div>
+        
+        <div className="mt-auto p-4 border-t border-white/5 bg-slate-950/20">
+          <button className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/[0.05] transition-all cursor-pointer group border border-transparent hover:border-white/5">
+            <div className="relative">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 border border-white/10 flex items-center justify-center text-[10px] font-black">AB</div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-black rounded-full shadow-lg" />
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="text-xs font-black text-slate-200 group-hover:text-purple-400 transition-colors">Ayoub B.</span>
+              <span className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Architect</span>
+            </div>
+          </button>
+        </div>
+      </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 shrink-0 border-b border-white/5 bg-surface flex items-center justify-end px-6">
-          <div className="flex items-center gap-2 text-xs">
-            <div
-              className={`w-2 h-2 rounded-full ${
-                healthy ? "bg-green" : "bg-red"
-              } animate-pulse-dot`}
-              aria-hidden="true"
-            />
-            <span className="text-text-dim">
-              {healthy ? "Connected" : "Disconnected"}
-            </span>
+      {/* ── Main Workspace Area ── */}
+      <main className="flex-1 flex flex-col min-w-0 bg-[#07080d] relative">
+        
+        {/* Subtle background glow */}
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-purple-600/5 blur-[150px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+
+        {/* Fixed Header */}
+        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-black/40 backdrop-blur-2xl z-10 flex-shrink-0">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 bg-slate-900/50 border border-white/5 px-3 py-1.5 rounded-lg group hover:border-white/20 transition-all cursor-pointer">
+              <div className="w-1.5 h-1.5 rounded-full bg-purple-500 shadow-[0_0_10px_rgba(124,58,237,1)]" />
+              <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">{selectedTarget}</span>
+              <ChevronRight size={12} className="text-slate-700" />
+            </div>
+            
+            <button className="w-8 h-8 rounded-lg border border-white/5 flex items-center justify-center text-slate-600 hover:text-slate-200 hover:bg-white/5 transition-all">
+              <Plus size={16} />
+            </button>
+          </div>
+          
+          <div className="flex items-center gap-8">
+            <div className={`relative transition-all duration-500 flex items-center ${searchFocused ? 'w-96' : 'w-72'}`}>
+              <Search className={`absolute left-3 w-4 h-4 transition-colors ${searchFocused ? 'text-purple-400' : 'text-slate-600'}`} />
+              <input 
+                id="global-search"
+                type="text" 
+                placeholder="GLOBAL COMMAND (⌘ + K)" 
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                className="bg-slate-900/40 border border-white/5 rounded-xl pl-10 pr-4 py-2 text-[10px] font-black tracking-widest w-full focus:outline-none focus:border-purple-600/30 focus:bg-black/60 transition-all placeholder:text-slate-800"
+              />
+              {!searchFocused && <Command size={12} className="absolute right-3 text-slate-800" />}
+            </div>
+            
+            <div className="h-6 w-[1px] bg-white/5" />
+
+            <div className="flex items-center gap-3">
+               <div className="flex flex-col text-right mr-2">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-700">System Status</span>
+                  <span className="text-[10px] font-black uppercase text-emerald-500">All Nodes Nominal</span>
+               </div>
+               <div className="w-10 h-10 rounded-xl border border-white/5 flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-all cursor-pointer relative group">
+                  <Bell size={18} />
+                  <div className="absolute top-2 right-2 w-2 h-2 bg-rose-500 border-2 border-black rounded-full group-hover:scale-125 transition-transform" />
+               </div>
+            </div>
           </div>
         </header>
 
-        <main
-          id="main-content"
-          className="flex-1 overflow-y-auto p-6"
-        >
-          <div className="max-w-[1600px] mx-auto">
+        {/* Scrollable Viewport */}
+        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+          <div className="p-8 max-w-[1600px] mx-auto min-h-full">
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/new" element={<NewScan />} />
-              <Route path="/target/:id" element={<TargetDetail />} />
-              <Route path="/scan/:sessionId" element={<ScanProgress />} />
-              <Route path="/agent" element={<AgentDashboard />} />
-              <Route path="/agent/:targetId" element={<AgentDashboard />} />
-              <Route path="*" element={<NotFound />} />
+              <Route path="/agent" element={<Placeholder title="Autonomous Agent Node" icon={<Bot size={48} />} />} />
+              <Route path="/assets" element={<Placeholder title="Attack Surface Area" icon={<Activity size={48} />} />} />
+              <Route path="/scans" element={<Placeholder title="Pipeline Management" icon={<Zap size={48} />} />} />
+              <Route path="/settings" element={<Placeholder title="System Configuration" icon={<Settings size={48} />} />} />
             </Routes>
           </div>
-        </main>
-      </div>
+        </div>
+
+      </main>
     </div>
   );
-}
+};
 
-// ── App ──────────────────────────────────────────────────────────────────
+const Placeholder: React.FC<{ title: string; icon: React.ReactNode }> = ({ title, icon }) => (
+  <div className="h-[70vh] flex flex-col items-center justify-center animate-fade-in">
+    <div className="w-24 h-24 rounded-3xl bg-slate-900/50 border border-white/5 flex items-center justify-center mb-8 text-slate-700 group hover:border-purple-600/20 hover:text-purple-600 transition-all duration-500 shadow-2xl">
+      {icon}
+    </div>
+    <h2 className="text-xl font-black uppercase tracking-[0.3em] text-slate-400 mb-4">{title}</h2>
+    <p className="text-slate-600 text-[10px] font-bold uppercase tracking-widest max-w-md text-center leading-relaxed opacity-50">
+      Node synchronization in progress. Initializing peripheral modules and establishing encrypted handshakes with discovery clusters.
+    </p>
+    <div className="mt-12 flex gap-4">
+       <button className="px-6 py-2 bg-purple-600/10 border border-purple-600/20 text-purple-400 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-purple-600 hover:text-white transition-all">Force Sync</button>
+       <Link to="/" className="px-6 py-2 bg-slate-900 border border-white/5 text-slate-500 rounded-lg text-[10px] font-black uppercase tracking-widest hover:text-white transition-all flex items-center gap-2">Return Home <ArrowRight size={12} /></Link>
+    </div>
+  </div>
+);
+
+// --- App Root ---
 
 export default function App() {
   return (
@@ -179,14 +203,17 @@ export default function App() {
         position="bottom-right"
         toastOptions={{
           style: {
-            background: "#1a1b26",
-            color: "#e4e5ed",
-            border: "1px solid rgba(255,255,255,0.05)",
-            borderRadius: "8px",
-            fontSize: "14px",
+            background: "#05060a",
+            color: "#e2e3eb",
+            border: "1px solid rgba(255,255,255,0.06)",
+            borderRadius: "16px",
+            fontSize: "11px",
+            fontWeight: "900",
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+            padding: "12px 20px",
+            boxShadow: "0 10px 40px rgba(0,0,0,0.5)"
           },
-          success: { iconTheme: { primary: "#00d4aa", secondary: "#1a1b26" } },
-          error: { iconTheme: { primary: "#e05a4f", secondary: "#1a1b26" } },
         }}
       />
       <AppShell />

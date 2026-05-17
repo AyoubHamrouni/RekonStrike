@@ -25,7 +25,7 @@ class SessionRepository:
         self, session_id: int, status: str, error: Optional[str] = None
     ):
         vals = {"status": status}
-        if status == "completed":
+        if status != "running":
             vals["ended_at"] = func.now()
         if error:
             vals["error_message"] = error

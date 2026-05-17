@@ -6,7 +6,10 @@ from .tools_base import ToolBase
 from .tools import PassiveReconTool, HttpProbeTool, ContentDiscoveryTool, VulnScanTool
 
 class ToolRegistry:
-    def __init__(self):
+    def __init__(self, settings=None):
+        from rekonstrike.config import load_settings
+
+        self.settings = settings or load_settings()
         self._tools = {}
         self.register(PassiveReconTool())
         self.register(HttpProbeTool())
@@ -22,7 +25,7 @@ class ToolRegistry:
     def list_tools(self) -> list[dict]:
         return [{"name": t.name, "description": t.description} for t in self._tools.values()]
         
-    async def call_tool(self, tool_name: str, **kwargs) -> dict:
+    async def call_tool(self, tool_name: str, timeout: float | None = None, **kwargs) -> dict:
         start_time = time.time()
         tool = self.get_tool(tool_name)
         if not tool:
@@ -46,8 +49,9 @@ class ToolRegistry:
             logging.info(f"Tool {tool_name} called with {kwargs}, result: {result}")
             return result
             
+        timeout = timeout if timeout is not None else self.settings.tool_timeout
         try:
-            result = await asyncio.wait_for(tool.execute(**kwargs), timeout=30.0)
+            result = await asyncio.wait_for(tool.execute(**kwargs), timeout=timeout)
             logging.info(f"Tool {tool_name} called with {kwargs}, result: {result}")
             return result
         except asyncio.TimeoutError:
@@ -55,7 +59,7 @@ class ToolRegistry:
                 "success": False,
                 "error": "timeout",
                 "data": None,
-                "duration_seconds": 30.0
+                "duration_seconds": timeout
             }
             logging.info(f"Tool {tool_name} called with {kwargs}, result: {result}")
             return result

@@ -217,10 +217,11 @@ async def phase_5_vulnscan(state: ReconState, registry: ToolRegistry) -> dict:
         urls = list(dict.fromkeys(urls + endpoint_urls))  # deduplicate preserving order
 
     # Build tech_stack map (url -> technologies)
-    tech_map = {}
-    for host in state.live_hosts:
-        tech_map[host["url"]] = host.get("tech_stack", [])
-        tech_map[host.get("url", "")] = host.get("tech_stack", [])
+    tech_map = {
+        host["url"]: host.get("tech_stack", [])
+        for host in state.live_hosts
+        if "url" in host and host["url"]
+    }
 
     result = await registry.call_tool(
         "vuln_scan",

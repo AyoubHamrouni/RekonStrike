@@ -3,21 +3,21 @@ import logging
 import random
 import time
 import re
-from functools import lru_cache
 from datetime import datetime
 from .tools_base import ToolBase
 
 logger = logging.getLogger(__name__)
 
 
-@lru_cache(maxsize=1)
-def _get_tool_runner():
+def _get_tool_runner(settings=None):
     from rekonstrike.runner import ToolRunner
     from rekonstrike.config import load_settings
-    return ToolRunner(load_settings())
+    return ToolRunner(settings or load_settings())
 
 
-_TOOL_TIMEOUT = 15  # seconds per tool before falling back to mock
+def _tool_timeout() -> int:
+    from rekonstrike.config import load_settings
+    return load_settings().tool_timeout
 
 
 async def _run_subfinder(target: str) -> list[str] | None:
@@ -29,13 +29,13 @@ async def _run_subfinder(target: str) -> list[str] | None:
             return None
         tool = Subfinder(runner)
         subs = await asyncio.wait_for(
-            tool.enumerate(target), timeout=_TOOL_TIMEOUT
+            tool.enumerate(target), timeout=_tool_timeout()
         )
         if subs:
             logger.info(f"subfinder: {len(subs)} subdomains for {target}")
             return subs
     except asyncio.TimeoutError:
-        logger.info(f"subfinder timed out after {_TOOL_TIMEOUT}s for {target}")
+        logger.info(f"subfinder timed out after {_tool_timeout()}s for {target}")
     except Exception as e:
         logger.warning(f"subfinder failed: {e}")
     return None
@@ -51,7 +51,7 @@ async def _run_httpx(targets: list[str]) -> list[dict] | None:
         tool = Httpx(runner)
         stdin_data = "\n".join(targets)
         result = await asyncio.wait_for(
-            tool.probe(stdin_data), timeout=_TOOL_TIMEOUT
+            tool.probe(stdin_data), timeout=_tool_timeout()
         )
         probed = []
         for line in result.json_lines():
@@ -74,7 +74,7 @@ async def _run_httpx(targets: list[str]) -> list[dict] | None:
             logger.info(f"httpx: {len(probed)} live hosts from {len(targets)} targets")
             return probed
     except asyncio.TimeoutError:
-        logger.info(f"httpx timed out after {_TOOL_TIMEOUT}s for {len(targets)} targets")
+        logger.info(f"httpx timed out after {_tool_timeout()}s for {len(targets)} targets")
     except Exception as e:
         logger.warning(f"httpx failed: {e}")
     return None
@@ -247,7 +247,7 @@ async def _run_katana(urls: list[str]) -> list[dict] | None:
         all_endpoints = []
         for url in urls:
             result = await asyncio.wait_for(
-                tool.crawl(url, depth=2, concurrency=5), timeout=_TOOL_TIMEOUT
+                tool.crawl(url, depth=2, concurrency=5), timeout=_tool_timeout()
             )
             for line in result.json_lines():
                 all_endpoints.append({
@@ -260,7 +260,7 @@ async def _run_katana(urls: list[str]) -> list[dict] | None:
             logger.info(f"katana: {len(all_endpoints)} endpoints from {len(urls)} URLs")
             return all_endpoints
     except asyncio.TimeoutError:
-        logger.info(f"katana timed out after {_TOOL_TIMEOUT}s for {len(urls)} URLs")
+        logger.info(f"katana timed out after {_tool_timeout()}s for {len(urls)} URLs")
     except Exception as e:
         logger.warning(f"katana failed: {e}")
     return None
@@ -275,7 +275,7 @@ async def _run_nuclei(urls: list[str]) -> list[dict] | None:
         tool = Nuclei(runner)
         stdin_data = "\n".join(urls)
         result = await asyncio.wait_for(
-            tool.scan(stdin_data), timeout=_TOOL_TIMEOUT
+            tool.scan(stdin_data), timeout=_tool_timeout()
         )
         vulns = []
         for line in result.json_lines():
@@ -291,7 +291,7 @@ async def _run_nuclei(urls: list[str]) -> list[dict] | None:
             logger.info(f"nuclei: {len(vulns)} findings from {len(urls)} targets")
             return vulns
     except asyncio.TimeoutError:
-        logger.info(f"nuclei timed out after {_TOOL_TIMEOUT}s for {len(urls)} targets")
+        logger.info(f"nuclei timed out after {_tool_timeout()}s for {len(urls)} targets")
     except Exception as e:
         logger.warning(f"nuclei failed: {e}")
     return None

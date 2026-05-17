@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 import typer
+from sqlalchemy import text
 
 from . import __version__
 from .config import load_settings
@@ -150,7 +151,8 @@ def health():
 
         async def _check():
             try:
-                await db.create_all()
+                async with db.engine.connect() as conn:
+                    await conn.execute(text("SELECT 1"))
                 out.success("Database: connected")
             except Exception as e:
                 out.error(f"Database: {e}")
