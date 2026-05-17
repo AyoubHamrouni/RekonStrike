@@ -114,7 +114,6 @@ class Phase:
         existing = self.ctx.subdomains or {domain}
 
         from ..tools.wrappers import ShuffleDNS, DNSx, Naabu, CloudEnum
-        import aiohttp
 
         # ── ShuffleDNS ────────────────────────────────────────────────────
         sdns = ShuffleDNS(self.ctx.runner)

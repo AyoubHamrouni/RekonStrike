@@ -1,7 +1,7 @@
 from typing import Optional, Sequence
 from sqlalchemy import select, func, insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from ..database import ScopeTarget, Subdomain, DNSRecord
+from ..database import ScopeTarget, Subdomain
 
 
 class TargetRepository:

@@ -1,6 +1,5 @@
 """Phase 5: Vulnerability scanning with Nuclei"""
 
-import json
 from . import phase
 from ..output import out
 

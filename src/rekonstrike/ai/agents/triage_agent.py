@@ -1,8 +1,7 @@
 import json
-from typing import Literal, Any, Dict, List
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from typing import Literal, Any, Dict
 from langchain_core.messages import HumanMessage, SystemMessage
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph, START
 from langgraph.prebuilt import ToolNode
 
 from ..state import TriageState

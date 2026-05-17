@@ -1,76 +1,60 @@
-"""Terminal output with Rich — progress bars, tables, panels, live display"""
+"""Logging-backed output adapter.
 
-from rich.console import Console as RichConsole
-from rich.table import Table
-from rich.panel import Panel
-from rich import box
+Replaces terminal-only Rich printing with structured logging so the backend
+can be UI-first while preserving the `out` API used across phases.
+"""
 
-_console = RichConsole()
+import logging
+
+logger = logging.getLogger("rekonstrike")
 
 
 class Output:
     @staticmethod
     def banner():
-        _console.print(
-            Panel.fit(
-                "[bold magenta]RekonStrike[/bold magenta] — [cyan]Reconnaissance & Asset Discovery Engine[/cyan]\n"
-                "[dim]v0.1.0 • Python 3.14+ • Async-first • PostgreSQL[/dim]",
-                border_style="bright_blue",
-                padding=(1, 4),
-            )
-        )
+        logger.info("RekonStrike — Reconnaissance & Asset Discovery Engine v0.1.0")
 
     @staticmethod
     def info(msg: str):
-        _console.print(f"[blue]⟐[/blue] {msg}")
+        logger.info(msg)
 
     @staticmethod
     def success(msg: str):
-        _console.print(f"[green]✓[/green] {msg}")
+        logger.info(msg)
 
     @staticmethod
     def warning(msg: str):
-        _console.print(f"[yellow]⚠[/yellow] {msg}")
+        logger.warning(msg)
 
     @staticmethod
     def error(msg: str):
-        _console.print(f"[red]✗[/red] {msg}")
+        logger.error(msg)
 
     @staticmethod
     def phase(num: int, name: str, desc: str = ""):
-        _console.print()
-        _console.rule(f"[bold magenta]Phase {num}: {name}[/bold magenta]")
-        if desc:
-            _console.print(f"[dim]{desc}[/dim]")
+        logger.info("Phase %s: %s %s", num, name, f"- {desc}" if desc else "")
 
     @staticmethod
     def table(title: str, columns: list[str], rows: list[list]):
-        table = Table(title=title, box=box.ROUNDED, header_style="bold cyan")
-        for col in columns:
-            table.add_column(col)
-        for row in rows:
-            table.add_row(*[str(c) for c in row])
-        _console.print(table)
+        logger.info("%s: %s rows", title, len(rows))
 
     @staticmethod
     def result(title: str, items: list[str], max_show: int = 20):
-        _console.print(f"\n[bold]{title}[/bold] [dim]({len(items)})[/dim]")
+        logger.info("%s (%d)", title, len(items))
         for item in items[:max_show]:
-            _console.print(f"  [green]└─[/green] {item}")
-        if len(items) > max_show:
-            _console.print(f"  [dim]... and {len(items) - max_show} more[/dim]")
+            logger.info("  - %s", item)
 
     @staticmethod
     def divider():
-        _console.rule(style="dim")
+        logger.info("---")
 
     @staticmethod
     def stat(label: str, value: str):
-        _console.print(f"  [cyan]{label}:[/cyan] {value}")
+        logger.info("%s: %s", label, value)
 
     @staticmethod
     def panel(title: str, content: str, style: str = "blue"):
-        _console.print(Panel(content, title=title, border_style=style))
+        logger.info("%s: %s", title, content)
 
 
 out = Output()

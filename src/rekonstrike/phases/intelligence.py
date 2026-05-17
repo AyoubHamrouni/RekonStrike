@@ -1,6 +1,5 @@
 """Phase 7: Intelligence Layer — AI-driven analysis of scan results"""
 
-import json
 import logging
 from . import phase
 from ..output import out

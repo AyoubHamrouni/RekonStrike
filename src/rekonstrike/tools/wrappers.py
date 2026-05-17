@@ -1,6 +1,14 @@
 """Tool wrappers for all integrated reconnaissance tools"""
+from __future__ import annotations
+
+import asyncio
+from typing import TYPE_CHECKING
 
 from .base import BaseTool
+
+if TYPE_CHECKING:
+    # For static type checkers only; avoids runtime import cycles.
+    from ..runner import ToolResult
 
 
 class Subfinder(BaseTool):
@@ -258,7 +266,6 @@ class WhoisLookup:
         return bool(self.api_key) or bool(shutil.which("whois"))
 
     async def lookup(self, domain: str) -> dict:
-        import asyncio
 
         if self.api_key:
             return await self._api_lookup(domain)
@@ -267,7 +274,7 @@ class WhoisLookup:
     async def _api_lookup(self, domain: str) -> dict:
         import aiohttp
 
-        url = f"https://www.whoisxmlapi.com/whoisserver/WhoisService"
+        url = "https://www.whoisxmlapi.com/whoisserver/WhoisService"
         params = {
             "apiKey": self.api_key,
             "domainName": domain,

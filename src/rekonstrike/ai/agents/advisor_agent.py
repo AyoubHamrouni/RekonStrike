@@ -1,9 +1,9 @@
-import json
 from typing import Any, Dict, List
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
+from ..factory import get_llm
 
 class TestSuggestion(BaseModel):
     test: str = Field(description="Short test name")
@@ -20,8 +20,6 @@ class AdvisorOutput(BaseModel):
     )
     suggestions: list[TestSuggestion]
 
-
-from ..factory import get_llm
 
 system_prompt = (
     "You are an expert manual testing advisor. Generate targeted, actionable attack vectors based on the "
@@ -85,5 +83,5 @@ async def get_test_suggestions(
             }
         )
         return result.get("suggestions", [])
-    except Exception as e:
+    except Exception:
         return []

@@ -4,24 +4,22 @@ Offensive security recon framework. Three-plane architecture: Automation Engine 
 
 ## Entrypoints & Structure
 
-- **CLI entry**: `src/rekonstrike/cli.py` → `rekonstrike.cli:app` (Typer). Admin-only commands: `install`, `config`, `serve`, `health`, `db migrate`.
 - **API entry**: `src/rekonstrike/api/server.py` → FastAPI with lifespan-managed Alembic migrations
 - **Agent entry**: `src/rekonstrike/agent/runner.py` → `ReconAgentRunner` wraps the LangGraph StateGraph
 - **Package lives under `src/`** — set `PYTHONPATH=src` (run.sh does this; alembic.ini has `prepend_sys_path = src`)
-- **Build**: hatchling (`[project.scripts]` + `[tool.hatch.build.targets.wheel]` with `packages = ["src/rekonstrike"]`)
+- **Build**: hatchling (`[tool.hatch.build.targets.wheel]` with `packages = ["src/rekonstrike"]`)
 
 ## Running
 
 | Action | Command |
 |--------|---------|
-| Unified server (API + UI) | `rekonstrike serve --port 8000 --reload` |
+| Unified server (API + UI) | `python -m rekonstrike` |
 | One-click | `./run.sh` |
 | API only | `uvicorn rekonstrike.api.server:app --reload` |
 | Agent demo | `python src/rekonstrike/agent/demo.py` |
 | Frontend dev | `cd ui && npm run dev` |
-| Check tools | `rekonstrike install` |
-| Run migrations | `rekonstrike db migrate` |
-| Health check | `rekonstrike health` |
+| Run migrations | `alembic upgrade head` |
+| Health check | `curl http://localhost:8000/health` |
 
 ## Config
 
@@ -162,7 +160,7 @@ Quirk: CI assumes the repo is checked out inside a parent `rekonstrike/` directo
 
 ## External Tools
 
-`rekonstrike install` checks availability. All are Go binaries except `cloud_enum` (Python) and `cewl` (Ruby gem). Tool wrappers in `src/rekonstrike/tools/wrappers.py`. `ToolRunner` in `src/rekonstrike/runner.py` handles native subprocess and Docker execution with semaphore-based concurrency.
+Tool availability is managed externally; all are Go binaries except `cloud_enum` (Python) and `cewl` (Ruby gem). Tool wrappers are in `src/rekonstrike/tools/wrappers.py`. `ToolRunner` in `src/rekonstrike/runner.py` handles native subprocess and Docker execution with semaphore-based concurrency.
 
 ## Key Architecture Files
 

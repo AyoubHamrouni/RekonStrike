@@ -12,11 +12,10 @@ RekonStrike v2 is a professional-grade reconnaissance and asset discovery framew
 
 ### Backend (Python)
 - **Install:** `pip install -e .` (Requires Python 3.14+)
-- **Install Tools:** `rekonstrike install` (Checks and installs Go/Python/Ruby tools)
-- **Run API & UI:** `rekonstrike serve --port 8000 --reload`
-- **Database Migrations:** `rekonstrike db migrate`
+- **Run API & UI:** `python -m rekonstrike`
+- **Database Migrations:** `alembic upgrade head`
 - **Run Agent Demo:** `python src/rekonstrike/agent/demo.py`
-- **Health Check:** `rekonstrike health`
+- **Health Check:** `curl http://localhost:8000/health`
 
 ### Frontend (React)
 - **Install:** `cd ui && npm install`
@@ -43,7 +42,6 @@ RekonStrike v2 is a professional-grade reconnaissance and asset discovery framew
     - `api/`: FastAPI routers and server entry point.
     - `tools/`: Low-level tool wrappers and `ToolRunner`.
     - `database.py`: SQLAlchemy models and database management.
-    - `cli.py`: Typer-based CLI entry point.
 - `ui/`: React frontend source code.
 - `migrations/`: Alembic database migration scripts.
 - `docker/`: Dockerfiles for the application and various recon tools.

@@ -57,22 +57,15 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
 
-### 2. Initialize Tools
-```bash
-# Checks for required Go tools (Subfinder, Httpx, Nuclei, etc.)
-rekonstrike install
-```
-
-### 3. Launch a Scan
-```bash
-# Start a wildcard scan
-rekonstrike scan example.com -t wildcard
-```
-
-### 4. Start the Web UI & API
+### 2. Start the Web UI & API
 ```bash
 # The API server uses modular routers and dependency injection
-uvicorn rekonstrike.api.server:app --host 0.0.0.0 --port 8000
+python -m rekonstrike
+```
+
+### 3. Start Frontend Development
+```bash
+cd ui && npm install && npm run dev
 ```
 
 ---

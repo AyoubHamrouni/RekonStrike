@@ -1,5 +1,5 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from ..deps import verify_auth, get_target_repo, get_host_repo
 from ...repositories.target_repo import TargetRepository
 from ...repositories.host_repo import HostRepository

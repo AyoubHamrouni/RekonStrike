@@ -1,12 +1,11 @@
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
-from ..deps import verify_auth, get_tm, settings, get_scan_service, get_session_repo
+from ..deps import verify_auth, get_scan_service, get_session_repo
 from ..manager import manager
 from ...services.scan_service import ScanService
 from ...repositories.session_repo import SessionRepository
 from ...phases import get_registered_phases
-import asyncio
 
 router = APIRouter(prefix="/scan", tags=["scans"])
 

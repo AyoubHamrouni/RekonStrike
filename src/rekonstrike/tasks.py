@@ -20,7 +20,8 @@ async def scan_task(
 
     settings = Settings(**ctx.get("settings", {}))
     db = Database(settings.database_url)
-    await db.create_all()
+    # Migration-managed schema expected. Do not call create_all() in production.
+    # Ensure migrations have been applied (use `alembic upgrade head`).
 
     pipeline = Pipeline(settings, db)
     try:
@@ -125,8 +126,8 @@ class TaskManager:
 
         settings = Settings(**settings_dict)
         db = Database(settings.database_url)
-        # In _run_direct, the Pipeline already uses repositories
-        await db.create_all()
+        # Migration-managed schema expected. Do not call create_all() in production.
+        # Ensure migrations have been applied (use `alembic upgrade head`).
 
         pipeline = Pipeline(settings, db)
 

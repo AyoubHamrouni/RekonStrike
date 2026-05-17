@@ -4,7 +4,6 @@ import asyncio
 import time
 import json
 import shutil
-from pathlib import Path
 from typing import Optional, Callable
 
 from .config import Settings
@@ -39,10 +38,10 @@ class ToolResult:
         self.success = returncode == 0
 
     def lines(self) -> list[str]:
-        return [l.strip() for l in self.stdout.splitlines() if l.strip()]
+        return [line.strip() for line in self.stdout.splitlines() if line.strip()]
 
     def json_lines(self) -> list[dict]:
-        return [json.loads(l) for l in self.lines() if l.startswith("{")]
+        return [json.loads(line) for line in self.lines() if line.startswith("{")]
 
 
 class ToolRunner:

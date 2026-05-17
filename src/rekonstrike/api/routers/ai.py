@@ -1,4 +1,3 @@
-from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..deps import verify_auth, get_target_repo, get_host_repo, settings
@@ -96,8 +95,6 @@ async def ai_scope_analysis(
 ):
     # Fetch program scope if available
     # For now, we'll use a mock scope or fetch from DB if implemented
-    from ...database import ProgramScope
-    from sqlalchemy import select
     
     # This requires a db session which we can get from repo or deps
     # For simplicity, let's assume we have some scope data

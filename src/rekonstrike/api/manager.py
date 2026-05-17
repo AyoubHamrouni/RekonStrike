@@ -20,11 +20,22 @@ class ConnectionManager:
 
     async def broadcast(self, session_id: int, event: str, data: dict):
         if session_id in self.active:
-            msg = json.dumps({"event": event, "data": data})
+            # Flatten structured payloads so clients receive a single top-level
+            # JSON object. Preserve `event` while merging any fields from
+            # `data` (which may already be a structured payload from the engine).
+            payload = data.copy() if isinstance(data, dict) else {"payload": data}
+            msg_obj = {"event": event}
+            # Merge payload fields into the top-level message. This means
+            # fields like `type`, `session_id`, `timestamp`, and `payload`
+            # will appear at the top level for easier client consumption.
+            msg_obj.update(payload)
+            msg = json.dumps(msg_obj)
             for ws in self.active[session_id]:
                 try:
                     await ws.send_text(msg)
                 except Exception:
+                    # Ignore individual websocket failures; connection cleanup
+                    # will be handled on disconnect.
                     pass
 
 

@@ -29,4 +29,4 @@ echo "🗄️  Using Database: $RS_DB_TYPE"
 
 # 4. Start Server
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src
-python3 -m rekonstrike serve --port 8000 --host 0.0.0.0
+python3 -m rekonstrike

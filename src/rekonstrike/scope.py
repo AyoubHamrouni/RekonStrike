@@ -2,7 +2,6 @@
 
 import re
 import ipaddress
-from typing import Optional
 
 
 class Scope:

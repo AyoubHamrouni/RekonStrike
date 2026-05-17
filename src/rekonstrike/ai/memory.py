@@ -1,6 +1,5 @@
 import logging
 from typing import List, Optional, Dict, Any
-import json
 
 try:
     from langchain_openai import OpenAIEmbeddings
@@ -9,10 +8,8 @@ except ImportError:
     OpenAIEmbeddings = None
     PGVector = None
 from langchain_core.documents import Document
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import Settings
-from ..database import AIVectorMemory
 
 logger = logging.getLogger(__name__)
 

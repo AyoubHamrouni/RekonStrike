@@ -63,8 +63,21 @@ class PhaseContext:
     wordlists: dict[str, Path] = field(default_factory=dict)
 
     async def emit(self, event: str, data: dict):
+        # Wrap event data into a structured payload for UI consumption.
+        from datetime import datetime
+
+        structured = {
+            "type": event,
+            "session_id": self.session_id,
+            "target_id": self.target_id,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "payload": data or {},
+        }
+
         for cb in self.event_callbacks:
-            await cb(event, data)
+            # Callbacks expect (event: str, data: dict) — keep the event string
+            # but provide a standardized `data` structure.
+            await cb(event, structured)
 
 
 # ─── Pipeline ─────────────────────────────────────────────────────────────────

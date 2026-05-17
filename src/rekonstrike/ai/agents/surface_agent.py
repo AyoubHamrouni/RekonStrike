@@ -4,6 +4,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 
+from ..factory import get_llm
+
 
 class AnomalousTarget(BaseModel):
     subdomain: str = Field(
@@ -22,7 +24,6 @@ class SurfaceAnalysisOutput(BaseModel):
     anomalous_targets: list[AnomalousTarget]
 
 
-from ..factory import get_llm
 
 system_prompt = (
     "You are an attack surface heuristic engine. Analyze the provided external footprint "

@@ -1,7 +1,7 @@
-from typing import Optional, Sequence, Any
+from typing import Optional, Sequence
 from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from ..database import ScanSession, ScanArtifact
+from ..database import ScanSession
 
 
 class SessionRepository:
