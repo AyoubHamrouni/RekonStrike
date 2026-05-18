@@ -155,6 +155,13 @@ export interface PaginationParams {
   order?: "asc" | "desc";
 }
 
+export interface PaginatedResponse<T> {
+  total: number;
+  page: number;
+  size: number;
+  items: T[];
+}
+
 export interface AgentSessionRequest {
   goal: string;
   max_steps?: number;

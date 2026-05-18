@@ -12,6 +12,9 @@ env:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rekonstrike
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -20,14 +23,28 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r rekonstrike/requirements.txt
+          pip install -r requirements.txt
           pip install ruff
       - name: Lint with ruff
-        run: ruff check rekonstrike/
+        run: ruff check src/rekonstrike/
 
   test:
     runs-on: ubuntu-latest
     needs: lint
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: vulnbank
+          POSTGRES_PASSWORD: vulnbank_password
+          POSTGRES_DB: rekonstrike_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: rekonstrike
@@ -41,8 +58,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-asyncio pytest-mock
+      - name: Run migrations
+        run: PYTHONPATH=src alembic upgrade head
+        env:
+          DATABASE_URL: postgresql+asyncpg://vulnbank:vulnbank_password@localhost:5432/rekonstrike_test
       - name: Run tests
         run: python -m pytest tests/ -v --tb=short
+        env:
+          TEST_DATABASE_URL: postgresql+asyncpg://vulnbank:vulnbank_password@localhost:5432/rekonstrike_test
+          PYTHONPATH: src
 
   build-frontend:
     runs-on: ubuntu-latest

@@ -8,6 +8,7 @@ import type {
   Stats,
   Phase,
   PaginationParams,
+  PaginatedResponse,
   AgentSessionRequest,
   AgentFeedbackRequest,
   ScanRequest,
@@ -101,16 +102,27 @@ export async function fetchTarget(targetId: number): Promise<Target> {
   return req<Target>(`/targets/${targetId}`);
 }
 
+export async function createTarget(
+  target: string,
+  targetType = "wildcard"
+): Promise<Target> {
+  return req<Target>("/targets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target, target_type: targetType }),
+  });
+}
+
 // ── Subdomains ──────────────────────────────────────────────────────────
 
 export async function fetchSubdomains(
   targetId: number,
   params: PaginationParams = {}
-): Promise<Subdomain[]> {
+): Promise<PaginatedResponse<Subdomain>> {
   const q = new URLSearchParams(
     Object.entries(params).filter(([_, v]) => v !== undefined) as [string, string][]
   ).toString();
-  return req<Subdomain[]>(`/targets/${targetId}/subdomains${q ? `?${q}` : ""}`);
+  return req<PaginatedResponse<Subdomain>>(`/targets/${targetId}/subdomains${q ? `?${q}` : ""}`);
 }
 
 // ── Live Hosts ──────────────────────────────────────────────────────────
@@ -118,11 +130,11 @@ export async function fetchSubdomains(
 export async function fetchLiveHosts(
   targetId: number,
   params: PaginationParams = {}
-): Promise<LiveHost[]> {
+): Promise<PaginatedResponse<LiveHost>> {
   const q = new URLSearchParams(
     Object.entries(params).filter(([_, v]) => v !== undefined) as [string, string][]
   ).toString();
-  return req<LiveHost[]>(`/targets/${targetId}/live-hosts${q ? `?${q}` : ""}`);
+  return req<PaginatedResponse<LiveHost>>(`/targets/${targetId}/live-hosts${q ? `?${q}` : ""}`);
 }
 
 // ── Vulnerabilities ─────────────────────────────────────────────────────
@@ -130,11 +142,11 @@ export async function fetchLiveHosts(
 export async function fetchVulnerabilities(
   targetId: number,
   params: PaginationParams = {}
-): Promise<Vulnerability[]> {
+): Promise<PaginatedResponse<Vulnerability>> {
   const q = new URLSearchParams(
     Object.entries(params).filter(([_, v]) => v !== undefined) as [string, string][]
   ).toString();
-  return req<Vulnerability[]>(`/targets/${targetId}/vulnerabilities${q ? `?${q}` : ""}`);
+  return req<PaginatedResponse<Vulnerability>>(`/targets/${targetId}/vulnerabilities${q ? `?${q}` : ""}`);
 }
 
 // ── Endpoints ───────────────────────────────────────────────────────────

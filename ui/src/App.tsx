@@ -17,6 +17,9 @@ import {
   ArrowRight
 } from "lucide-react";
 import Dashboard from "./components/Dashboard";
+import AgentDashboard from "./components/AgentDashboard";
+import NewScan from "./components/NewScan";
+import ScanProgress from "./components/ScanProgress";
 
 /**
  * REKONSTRIKE MAIN APPLICATION SHELL
@@ -165,9 +168,10 @@ const AppShell: React.FC = () => {
           <div className="p-8 max-w-[1600px] mx-auto min-h-full">
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/agent" element={<Placeholder title="Autonomous Agent Node" icon={<Bot size={48} />} />} />
+              <Route path="/agent" element={<AgentDashboard />} />
               <Route path="/assets" element={<Placeholder title="Attack Surface Area" icon={<Activity size={48} />} />} />
-              <Route path="/scans" element={<Placeholder title="Pipeline Management" icon={<Zap size={48} />} />} />
+              <Route path="/scans" element={<NewScan />} />
+              <Route path="/scans/:sessionId" element={<ScanProgress />} />
               <Route path="/settings" element={<Placeholder title="System Configuration" icon={<Settings size={48} />} />} />
             </Routes>
           </div>

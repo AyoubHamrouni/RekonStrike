@@ -1,10 +1,31 @@
 from typing import Optional
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from ..deps import verify_auth, get_target_repo, get_host_repo
 from ...repositories.target_repo import TargetRepository
 from ...repositories.host_repo import HostRepository
 
 router = APIRouter(prefix="/targets", tags=["targets"])
+
+
+class CreateTargetRequest(BaseModel):
+    target: str
+    target_type: str = "wildcard"
+
+
+@router.post("")
+async def create_target(
+    req: CreateTargetRequest,
+    auth: bool = Depends(verify_auth),
+    repo: TargetRepository = Depends(get_target_repo),
+):
+    obj = await repo.get_or_create_target(req.target, req.target_type)
+    return {
+        "id": obj.id,
+        "target": obj.target,
+        "target_type": obj.target_type,
+        "created_at": obj.created_at.isoformat() if obj.created_at else None,
+    }
 
 
 @router.get("")

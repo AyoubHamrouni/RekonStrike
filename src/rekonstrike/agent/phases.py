@@ -177,7 +177,6 @@ async def phase_4_content(state: ReconState, registry: ToolRegistry) -> dict:
 
     endpoints = result["data"].get("endpoints", [])
 
-    # Add endpoints as findings
     new_findings = [
         {
             "type": "endpoint",
@@ -189,13 +188,35 @@ async def phase_4_content(state: ReconState, registry: ToolRegistry) -> dict:
         for e in endpoints
     ]
 
-    return {
+    updates = {
         "success": True,
         "error": None,
         "tools_run": tools_run,
         "findings": state.findings + new_findings,
         "endpoints": endpoints,
     }
+
+    # Optional browser capture on priority targets when service is configured
+    try:
+        from rekonstrike.config import load_settings
+        settings = load_settings()
+        browser_url = getattr(settings, "browser_service_url", "")
+        if browser_url:
+            priority = state.strategy.get("priority_targets", [])
+            capture_targets = [u for u in urls if any(p in u for p in priority)] if priority else urls[:3]
+            if capture_targets:
+                from rekonstrike.tools.browser_client import BrowserCaptureClient
+                client = BrowserCaptureClient(browser_url)
+                browser_result = await client.capture_batch(capture_targets)
+                if browser_result.get("success"):
+                    updates["js_bundles"] = browser_result.get("js_bundles", [])
+                    updates["source_maps"] = browser_result.get("source_maps", [])
+                    updates["browser_captures"] = browser_result.get("captures", [])
+                    tools_run.append("browser_capture")
+    except Exception:
+        logger.info("browser capture skipped", exc_info=True)
+
+    return updates
 
 
 @register_phase("phase_5_vulnscan", 5, "Vulnerability scanning — run Nuclei templates", ["phase_3_httpprobe"])

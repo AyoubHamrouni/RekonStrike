@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     tool_timeout: int = 300
     tool_mode: str = "native"
 
+    # Browser capture service
+    browser_service_url: str = "http://localhost:3001"
+
     @property
     def configured_providers(self) -> list[str]:
         providers = []
