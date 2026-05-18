@@ -40,7 +40,7 @@ class PlatformClient(ABC):
                         except json.JSONDecodeError:
                             return {}
                     return {}
-            except aiohttp.ClientError, asyncio.TimeoutError:
+            except (aiohttp.ClientError, asyncio.TimeoutError):
                 if attempt == 0:
                     await asyncio.sleep(2)
                     continue

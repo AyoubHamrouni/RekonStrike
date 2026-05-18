@@ -3,6 +3,7 @@ import logging
 import random
 import time
 import re
+import os
 from datetime import datetime
 from .tools_base import ToolBase
 
@@ -21,6 +22,10 @@ def _tool_timeout() -> int:
 
 
 async def _run_subfinder(target: str) -> list[str] | None:
+    # Prefer mock data unless explicit env var enables real external tools.
+    if os.environ.get("RS_USE_REAL_TOOLS", "") != "1":
+        return None
+
     try:
         from rekonstrike.tools.wrappers import Subfinder
 
@@ -42,6 +47,10 @@ async def _run_subfinder(target: str) -> list[str] | None:
 
 
 async def _run_httpx(targets: list[str]) -> list[dict] | None:
+    # Prefer mock data unless explicit env var enables real external tools.
+    if os.environ.get("RS_USE_REAL_TOOLS", "") != "1":
+        return None
+
     try:
         from rekonstrike.tools.wrappers import Httpx
 

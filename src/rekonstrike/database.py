@@ -8,6 +8,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 from .config import load_settings
+from urllib.parse import urlparse
+import re
 
 
 class Base(DeclarativeBase):
@@ -57,6 +59,31 @@ class LiveHost(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     subdomain_rel: Mapped[Optional["Subdomain"]] = relationship()
+
+
+def normalize_host(raw: str) -> str:
+    """Normalize a URL or host string to a lowercase hostname without scheme,
+    trailing slashes, or default ports 80/443.
+    Examples:
+      normalize_host('https://API.Example.com:443/') -> 'api.example.com'
+      normalize_host('http://example.com:8080/path') -> 'example.com:8080'
+    """
+    if not raw:
+        return ""
+    raw = raw.strip()
+    # If it doesn't look like a URL, prepend scheme to help urlparse
+    if not re.match(r"^[a-zA-Z]+://", raw):
+        raw_for_parse = "//" + raw
+    else:
+        raw_for_parse = raw
+    parsed = urlparse(raw_for_parse)
+    host = parsed.hostname or ""
+    port = parsed.port
+    host = host.lower()
+    # Only include non-default ports
+    if port and port not in (80, 443):
+        return f"{host}:{port}"
+    return host
 
 
 class Program(Base):
@@ -147,6 +174,17 @@ class AIInsight(Base):
     input_hash: Mapped[str] = mapped_column(String(64))
     result: Mapped[dict] = mapped_column(JSON, default=dict)
     model_used: Mapped[str] = mapped_column(String(100), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+class AIVectorMemory(Base):
+    __tablename__ = "ai_vector_memory"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    target_id: Mapped[int] = mapped_column(ForeignKey("scope_targets.id", ondelete="CASCADE"))
+    memory_type: Mapped[str] = mapped_column(String(50))
+    content: Mapped[str] = mapped_column(Text)
+    embedding_model: Mapped[str] = mapped_column(String(100), default="")
+    metadata_: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
 

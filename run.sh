@@ -24,7 +24,7 @@ if [ ! -d "ui/dist" ]; then
 fi
 
 # 3. Database Check
-export RS_DB_TYPE=${RS_DB_TYPE:-sqlite}
+export RS_DB_TYPE=${RS_DB_TYPE:-postgresql}
 echo "🗄️  Using Database: $RS_DB_TYPE"
 
 # 4. Start Server

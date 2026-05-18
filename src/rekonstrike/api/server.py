@@ -8,6 +8,9 @@ from rekonstrike.config import load_settings
 from rekonstrike.database import get_database
 from rekonstrike.tasks import get_task_manager
 from rekonstrike.api.routers.agent import router as agent_router
+from rekonstrike.api.routers.scans import router as scans_router
+from rekonstrike.api.routers.targets import router as targets_router
+from rekonstrike.api.routers.ai import router as ai_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -65,3 +68,6 @@ async def get_config():
 
 # Routers
 app.include_router(agent_router, prefix="/api/v1")
+app.include_router(scans_router, prefix="/api/v1")
+app.include_router(targets_router, prefix="/api/v1")
+app.include_router(ai_router, prefix="/api/v1")

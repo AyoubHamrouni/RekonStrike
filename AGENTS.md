@@ -1,4 +1,4 @@
-# RekonStrike v2
+# RekonStrike 
 
 Offensive security recon framework. Three-plane architecture: Automation Engine (deterministic phases), Manual Workspace (guided workflows), AI Intelligence (LLM-driven agent with strategist/triager split).
 
@@ -185,3 +185,19 @@ Tool availability is managed externally; all are Go binaries except `cloud_enum`
 | `src/rekonstrike/api/routers/ai.py` | Legacy fragmented AI endpoints (surface, triage, fp-filter, scope, advisor, report) |
 | `src/rekonstrike/api/deps.py` | FastAPI DI (repos, auth, DB session) |
 | `src/rekonstrike/services/scan_service.py` | Scan orchestration |
+
+
+## Current Implementation State (automated update)
+
+- STEP 1 — Config: Completed. `src/rekonstrike/config.py` now exposes `Settings` fields and a `api_key(service)` helper. Environment parsing supports `RS_PLATFORM_KEYS__*`, `RS_AI_KEYS__*`, and `RS_AI_URLS__*`.
+- STEP 2 — Database: Completed. `src/rekonstrike/database.py` added `normalize_host()` and `AIVectorMemory` model. Alembic migration added at `migrations/versions/a1b2c3d4e5f6_add_ai_vector_memory.py`.
+- STEP 3 — API & platform fixes: Completed. Routers registered in `src/rekonstrike/api/server.py`. Fixed `platforms/base.py` exception clause. CI Python version adjusted in `.github/workflows/ci.yml`.
+- STEP 4 — Go filter: Completed. `filter/` contains a CLI binary (`main.go`), core filter logic (`filter.go`), schema (`schema.go`), tests (`filter_test.go`), and `Dockerfile`.
+- STEP 5 — Browser service: Completed. `browser-service/` provides a full Playwright-based headless capture service. `src/capture.ts` implements `captureSite()` with Chromium headless: captures full-page screenshot (base64), collects all HTTP request/response traffic (`raw_traffic`), extracts JS bundles from network responses and inline scripts, and discovers source maps (`source_maps`). Dockerfile installs system Chromium + Playwright. Service exposed on port 3001 in `docker-compose.yml`.
+- STEP 6 — Documentation: Completed. This `Current Implementation State` block documents all completed steps.
+
+Notes and next actions:
+- Tests: 35 unit tests pass (config, scope, scoring, engine). DB-dependent tests (database, agent) require PostgreSQL. Override URL via `TEST_DATABASE_URL`. CI should use a Postgres service. Alembic migrations must be applied to any Postgres used for testing or production.
+- Browser-service: Playwright capture is implemented. If you need to run it outside Docker, install Playwright browsers locally: `npx playwright install chromium`. The `CHROMIUM_PATH` env var can override the Chromium executable path.
+- CSS source map extraction is not yet implemented (JS source maps are the highest-value target).
+- Backward compatibility: Event payload shapes and WebSocket messages were flattened for easier UI consumption; ensure frontends are updated if they relied on the previous nested structure.
