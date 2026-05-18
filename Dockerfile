@@ -6,6 +6,8 @@ WORKDIR /ui
 COPY ui/package.json ui/package-lock.json ./
 RUN npm ci
 COPY ui/ .
+ARG API_PROXY_TARGET
+ENV API_PROXY_TARGET=$API_PROXY_TARGET
 RUN npm run build
 
 # ── Stage 2: Python runtime (API server) ──────────────────────────────────
@@ -26,8 +28,6 @@ COPY migrations/ migrations/
 COPY alembic.ini .
 COPY config.yaml .
 
-COPY --from=frontend-builder /ui/dist/ ui/dist/
-
 RUN addgroup --system app && adduser --system --ingroup app app && \
     chown -R app:app /app
 USER app
@@ -39,61 +39,21 @@ EXPOSE 8000
 
 CMD ["python3", "-m", "rekonstrike", "serve", "--host", "0.0.0.0", "--port", "8000"]
 
-# ── Stage 3: Nginx (UI serving) ──────────────────────────────────────────
-FROM nginx:alpine AS ui
+# ── Stage 3: Next.js UI server ────────────────────────────────────────────
+FROM node:22-alpine AS ui
 
-COPY --from=frontend-builder /ui/dist/ /usr/share/nginx/html/
+WORKDIR /app
 
-COPY <<'EOF' /etc/nginx/conf.d/default.conf
-server {
-    listen 80;
-    server_name _;
-    root /usr/share/nginx/html;
-    index index.html;
+COPY --from=frontend-builder /ui/.next/standalone ./
+COPY --from=frontend-builder /ui/.next/static ./.next/static
+COPY --from=frontend-builder /ui/public ./public
 
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    location /health { proxy_pass http://api:8000; }
-    location /phases { proxy_pass http://api:8000; }
-    location /scan { proxy_pass http://api:8000; }
-    location /sessions { proxy_pass http://api:8000; }
-
-    location /targets {
-        proxy_pass http://api:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # SSE streaming — no buffering
-    location ~ ^/targets/[^/]+/agent/[^/]+/stream {
-        proxy_pass http://api:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_buffering off;
-        proxy_cache off;
-        proxy_set_header Connection '';
-        chunked_transfer_encoding on;
-    }
-
-    location /ws/ {
-        proxy_pass http://api:8000/ws/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-    }
-}
-EOF
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -qO- http://localhost:80/ || exit 1
+    CMD wget -qO- http://localhost:3000/ || exit 1
 
-EXPOSE 80
+EXPOSE 3000
+
+CMD ["node", "server.js"]

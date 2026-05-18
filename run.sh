@@ -3,7 +3,7 @@
 
 set -e
 
-echo "🚀 Starting RekonStrike..."
+echo " Starting RekonStrike..."
 
 # 1. Environment Detection
 if [ -d ".venv" ]; then
@@ -11,22 +11,24 @@ if [ -d ".venv" ]; then
 elif [ -d "venv" ]; then
     source venv/bin/activate
 else
-    echo "⚠️  Virtual environment not found. Creating one..."
+    echo "  Virtual environment not found. Creating one..."
     python3 -m venv .venv
     source .venv/bin/activate
     pip install -r requirements.txt
 fi
 
 # 2. UI Build Check
-if [ ! -d "ui/dist" ]; then
-    echo "📦 Building Frontend (first time)..."
+if [ ! -d "ui/.next" ]; then
+    echo " Building Frontend (first time)..."
     cd ui && npm install && npm run build && cd ..
 fi
 
 # 3. Database Check
 export RS_DB_TYPE=${RS_DB_TYPE:-postgresql}
-echo "🗄️  Using Database: $RS_DB_TYPE"
+echo "  Using Database: $RS_DB_TYPE"
 
 # 4. Start Server
 export PYTHONPATH=$PYTHONPATH:$(pwd)/src
+echo "  Starting API on :8000 ..."
+echo "  UI dev: cd ui && npm run dev"
 python3 -m rekonstrike

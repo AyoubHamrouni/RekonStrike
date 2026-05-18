@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>RekonStrike v2</h1>
+  <h1>RekonStrike </h1>
 </div>
 
 <p align="center">

@@ -29,9 +29,13 @@ services:
       context: .
       dockerfile: Dockerfile
       target: ui
+      args:
+        API_PROXY_TARGET: http://api:8000
     container_name: rekonstrike-ui
     ports:
-      - "80:80"
+      - "3000:3000"
+    environment:
+      PORT: "3000"
     depends_on:
       - api
     restart: unless-stopped
