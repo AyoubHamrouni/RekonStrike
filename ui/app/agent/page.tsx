@@ -85,7 +85,7 @@ export default function AgentPage() {
   };
 
   return (
-    <div className="space-y-8 animate-fade-in pb-12">
+    <div className="space-y-6 animate-fade-in pb-12">
       <div>
         <h1 className="text-xl font-bold text-slate-200">Agent Reconnaissance</h1>
         <p className="text-sm text-slate-500 mt-0.5">

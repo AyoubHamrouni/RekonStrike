@@ -211,14 +211,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
 
-          <div className="flex items-center gap-8">
-            <div
-              className={`relative transition-all duration-500 flex items-center ${
-                searchFocused ? "w-96" : "w-72"
-              }`}
-            >
+          <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
+            <div className="relative flex items-center w-28 xs:w-36 sm:w-44 lg:w-56">
               <Search
-                className={`absolute left-3 w-4 h-4 transition-colors ${
+                className={`absolute left-2.5 w-3.5 h-3.5 transition-colors shrink-0 ${
                   searchFocused ? "text-purple-400" : "text-slate-600"
                 }`}
               />
@@ -226,38 +222,36 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 id="global-search"
                 type="search"
                 role="searchbox"
-                placeholder='GLOBAL COMMAND (⌘ + K)'
+                placeholder='SEARCH (⌘K)'
                 aria-label="Global search"
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setSearchFocused(false)}
-                className="bg-slate-900/40 border border-white/5 rounded-xl pl-10 pr-4 py-2 text-[10px] font-black tracking-widest w-full focus:outline-none focus:border-purple-600/30 focus:bg-black/60 transition-all placeholder:text-slate-800"
+                className="bg-slate-900/40 border border-white/5 rounded-xl pl-8 pr-3 py-2 text-[10px] font-black tracking-widest w-full focus:outline-none focus:border-purple-600/30 focus:bg-black/60 transition-all placeholder:text-slate-800 truncate"
               />
               {!searchFocused && (
-                <Command size={12} className="absolute right-3 text-slate-800" />
+                <Command size={11} className="absolute right-2.5 text-slate-800 pointer-events-none hidden sm:block" />
               )}
             </div>
 
-            <div className="h-6 w-[1px] bg-white/5" />
+            <div className="h-5 w-[1px] bg-white/5 hidden sm:block" />
 
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col text-right mr-2">
-                <span className="text-[9px] font-black uppercase tracking-widest text-slate-700">
-                  System Status
-                </span>
-                <span className="text-[10px] font-black uppercase text-emerald-500">
-                  All Nodes Nominal
-                </span>
-              </div>
-              <div className="w-10 h-10 rounded-xl border border-white/5 flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-all cursor-pointer relative group">
-                <Bell size={18} />
-                <div className="absolute top-2 right-2 w-2 h-2 bg-rose-500 border-2 border-black rounded-full group-hover:scale-125 transition-transform" />
-              </div>
+            <div className="hidden sm:flex-col text-right mr-1 sm:flex lg:flex">
+              <span className="text-[9px] font-black uppercase tracking-widest text-slate-700 hidden lg:block">
+                System Status
+              </span>
+              <span className="text-[10px] font-black uppercase text-emerald-500 hidden lg:block">
+                All Nodes Nominal
+              </span>
+            </div>
+            <div className="w-8 h-8 rounded-lg border border-white/5 flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-all cursor-pointer relative group shrink-0">
+              <Bell size={15} />
+              <div className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-rose-500 border border-black rounded-full group-hover:scale-125 transition-transform" />
             </div>
           </div>
         </header>
 
         <div id="main-content" className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
-          <div className="p-8 max-w-[1600px] mx-auto min-h-full">{children}</div>
+          <div className="p-4 lg:p-6 xl:p-8 max-w-7xl mx-auto min-h-full">{children}</div>
         </div>
       </main>
     </div>

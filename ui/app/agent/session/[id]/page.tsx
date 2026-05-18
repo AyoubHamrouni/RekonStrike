@@ -329,7 +329,7 @@ export default function AgentSessionPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in pb-12">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link
@@ -372,11 +372,11 @@ export default function AgentSessionPage() {
       {strategy && <StrategyCard strategy={strategy} />}
 
       {/* Main layout */}
-      <div className="grid grid-cols-12 gap-6">
-        <div className="col-span-8">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="lg:col-span-8">
           <GuidanceLog items={guidance} />
         </div>
-        <div className="col-span-4 space-y-4">
+        <div className="lg:col-span-4 space-y-4">
           <PhaseStepper
             steps={phaseSteps}
             currentDescription={currentPhaseMeta?.description || null}

@@ -97,7 +97,7 @@ function StatsPanel({ session }: { session: Session | null }) {
   if (!session?.stats) return null;
   const stats = session.stats;
   return (
-    <div className="grid grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {Object.entries(stats)
         .filter(([k]) => !["sessions"].includes(k))
         .map(([key, val]) => (
@@ -190,8 +190,8 @@ export default function ScanProgressPage() {
       </div>
 
       {sessionLoading ? (
-        <div className="grid grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
             <div key={i} className="h-24 skeleton rounded-lg" />
           ))}
         </div>

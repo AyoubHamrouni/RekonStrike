@@ -104,7 +104,7 @@ export default function TargetDetailPage() {
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="text-center">
             <Globe size={20} className="mx-auto mb-2 text-purple-500" />
             <div className="text-2xl font-black text-slate-100">{stats.subdomains}</div>

@@ -1,203 +1,476 @@
-# RekonStrike 
+# AGENTS.md — RekonStrike
 
-Offensive security recon framework. Three-plane architecture: Automation Engine (deterministic phases), Manual Workspace (guided workflows), AI Intelligence (LLM-driven agent with strategist/triager split).
+Primary context file for AI coding agents (Claude Code, Codex, etc.).
+Read this entire file before touching any code.
 
-## Entrypoints & Structure
+---
 
-- **API entry**: `src/rekonstrike/api/server.py` → FastAPI with lifespan-managed Alembic migrations
-- **Agent entry**: `src/rekonstrike/agent/runner.py` → `ReconAgentRunner` wraps the LangGraph StateGraph
-- **Package lives under `src/`** — set `PYTHONPATH=src` (run.sh does this; alembic.ini has `prepend_sys_path = src`)
-- **Build**: hatchling (`[tool.hatch.build.targets.wheel]` with `packages = ["src/rekonstrike"]`)
+## What this project is
 
-## Running
+RekonStrike is a professional reconnaissance and attack surface mapping framework
+for bug bounty hunters and penetration testers. It augments human methodology — it
+does not replace it. The human stays in the loop at every meaningful decision point.
 
-| Action | Command |
-|--------|---------|
-| Unified server (API + UI) | `python -m rekonstrike` |
-| One-click | `./run.sh` |
-| API only | `uvicorn rekonstrike.api.server:app --reload` |
-| Agent demo | `python src/rekonstrike/agent/demo.py` |
-| Frontend dev | `cd ui && npm run dev` |
-| Run migrations | `alembic upgrade head` |
-| Health check | `curl http://localhost:8000/health` |
+Target users are technical professionals. They know proxies, terminals, Burp Suite,
+and security tooling. No hand-holding UX assumptions.
 
-## Config
+Core principle: only delegate to AI what cannot be solved deterministically. Every
+LLM call has a bounded input, a structured output, and a clear reason it cannot be
+a script.
 
-- Pydantic-settings in `src/rekonstrike/config.py:Settings` — reads `.env` file. Fields: `database_url`, `anthropic_api_key`, `openai_api_key`, `google_api_key`, `ai_provider`, `default_ai_model`
-- **PostgreSQL only** (`postgresql+asyncpg://...`) — SQLite removed. Default: `postgresql+asyncpg://postgres:postgres@localhost:5432/rekonstrike`. Override via `database_url` env var or `.env`
-- Redis optional — `TaskManager` falls back to direct asyncio execution if Redis unavailable
-- Tool execution: `ToolRunner` in `runner.py` — native (subprocess) or Docker. Mode and concurrency set in `config.yaml`
-- Platform API keys stored in `Settings` (used by `PlatformManager` to sync program scope)
-- `.env.example` shows current field names
+---
 
-## Testing
-
-```bash
-python -m pytest tests/ src/rekonstrike/agent/ -x -q
-```
-
-- Tests require `pytest-asyncio` — each test needs `@pytest.mark.asyncio`
-- Fixtures: `settings`, `db` (Database), `session` (AsyncSession), `scope_wildcard`/`scope_domain`, `runner`, `scorer`
-- `conftest.py` is at `tests/conftest.py`
-- Tests require a running PostgreSQL. Override URL via `TEST_DATABASE_URL` env var (default: `postgresql+asyncpg://vulnbank:vulnbank_password@localhost:5432/rekonstrike_test`)
-- Agent tests use `@patch('rekonstrike.agent.graph.get_llm')` to mock the LLM
-- Mock LLM responses must include `next_action` + `reasoning` (minimal); `guidance`, `strategy`, `analysis` are optional (default to empty)
-- Test agent e2e flows with `ReconAgentRunner` + mocked LLM `side_effect`
-
-## Linting
-
-```bash
-ruff check src/rekonstrike/
-```
-
-No type checker configured.
-
-## Agent Architecture (Strategist + Triager)
-
-The agent uses **two distinct LLM roles** rather than a single "what next?" loop:
+## Repository layout
 
 ```
-START → input → strategy (LLM: "what's our approach?")
-                → executor (deterministic phase)
-                → triage (LLM: "what did we find?")
-                → executor → triage → ... → stop
+rekonstrike/
+├── AGENTS.md                  # this file
+├── ARCHITECTURE.md            # stack decisions and rationale
+├── docker-compose.yml
+├── .github/workflows/ci.yml
+│
+├── rekonstrike/               # Python backend (FastAPI + LangGraph)
+│   ├── api/
+│   │   ├── server.py          # FastAPI app, lifespan, CORS
+│   │   ├── deps.py            # dependency injection
+│   │   ├── manager.py         # WebSocket connection manager
+│   │   └── routers/
+│   │       ├── scans.py       # scan start/cancel/ws
+│   │       ├── targets.py     # subdomains, live hosts, vulns
+│   │       ├── ai.py          # AI analysis endpoints
+│   │       └── agent.py       # autonomous agent SSE streaming
+│   ├── agent/                 # LangGraph autonomous recon agent
+│   │   ├── graph.py           # StateGraph: input→strategy→executor→triage
+│   │   ├── state.py           # ReconState Pydantic model
+│   │   ├── phases.py          # deterministic phase registry
+│   │   ├── runner.py          # ReconAgentRunner (batch + stream)
+│   │   ├── tools.py           # PassiveRecon, HttpProbe, ContentDiscovery, VulnScan
+│   │   ├── tool_registry.py   # ToolRegistry with timeout handling
+│   │   └── tools_base.py      # ToolBase ABC
+│   ├── ai/                    # AI intelligence layer
+│   │   ├── factory.py         # get_llm() — Anthropic/OpenAI/Google/OpenRouter
+│   │   ├── memory.py          # PGVector long-term memory
+│   │   ├── agents/
+│   │   │   ├── triage_agent.py    # LangGraph triage with tool use
+│   │   │   ├── surface_agent.py   # attack surface analyzer
+│   │   │   ├── advisor_agent.py   # per-feature test suggestions
+│   │   │   └── report_agent.py    # bug report drafter
+│   │   └── tools/
+│   │       └── scope_tools.py     # scope advisor
+│   ├── phases/                # deterministic pipeline phases
+│   │   ├── validation.py      # phase 0
+│   │   ├── passive_recon.py   # phase 1
+│   │   ├── active_enum.py     # phase 2
+│   │   ├── dns_brute.py       # phase 2b — takeover detection
+│   │   ├── http_probing.py    # phase 3
+│   │   ├── content_discovery.py # phase 4
+│   │   ├── js_analysis.py     # phase 4b — JS secret scanning
+│   │   ├── vuln_scan.py       # phase 5
+│   │   ├── roi_scoring.py     # phase 6
+│   │   └── intelligence.py    # phase 7 — AI layer
+│   ├── platforms/             # HackerOne, Bugcrowd, Intigriti clients
+│   ├── repositories/          # data access layer (repository pattern)
+│   ├── services/              # business logic orchestration
+│   ├── tools/                 # Go tool wrappers (subprocess calls)
+│   ├── database.py            # SQLAlchemy models
+│   ├── config.py              # pydantic-settings Settings
+│   ├── engine.py              # Pipeline orchestrator
+│   ├── scoring.py             # ROI scoring engine
+│   ├── scope.py               # scope validation
+│   └── cli.py                 # admin CLI (typer)
+│
+├── browser-service/           # TypeScript — Playwright browser automation
+│   ├── src/
+│   │   ├── index.ts           # Express HTTP server
+│   │   ├── agent.ts           # browser surface agent loop
+│   │   ├── capture.ts         # network traffic capture
+│   │   ├── extractor.ts       # JS bundle + source map analysis
+│   │   └── types.ts           # shared TypeScript interfaces
+│   ├── package.json
+│   └── tsconfig.json
+│
+├── proxy-service/             # mitmproxy addon (Python, runs embedded)
+│   ├── addon.py               # scope-filtered traffic capture addon
+│   └── README.md
+│
+├── ui/                        # React + TypeScript frontend
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── hooks/
+│   │   └── types/
+│   ├── package.json
+│   └── tsconfig.json
+│
+└── docker/
+    └── tools/
+        └── Dockerfile         # multi-stage Go tool builder (TOOL build arg)
 ```
 
-**Strategist** (runs once at start, optionally at major pivots):
-- Analyzes program context (bounty range, scope freshness, competition)
-- Sets `strategy` dict with focus areas, priority targets, depth-vs-breadth
-- Produces initial `guidance` for the user
-- Decides first phase to execute
+---
 
-**Triager** (runs after every phase):
-- Interprets phase results through a bug bounty lens
-- Highlights interesting findings
-- Produces `guidance` explaining what was found and why it matters
-- Decides next action: next phase, re-strategize, interrupt, or stop
+## Stack — what runs where and why
 
-Neither decides individual tool calls — phases handle that deterministically.
+### Python (backend core)
 
-### Agent State (`ReconState`)
+**Runtime**: Python 3.13+
+**Framework**: FastAPI with asyncio throughout — no sync code in hot paths
+**Why Python here**: the LLM ecosystem (LangChain, LangGraph, anthropic-sdk,
+langchain-anthropic) is Python-first. Every library needed exists and is mature.
+This layer is IO-bound (waiting on LLM responses and network calls), not
+CPU-bound, so Python's GIL is not a bottleneck.
 
-| Field | Type | Set by | Purpose |
-|-------|------|--------|---------|
-| `target_domain` | `str` | caller | Target being recon'd |
-| `goal` | `str` | caller | High-level objective |
-| `program_scope` | `Dict[str, List[str]]` | caller / runner | In-scope and out-of-scope assets |
-| `platform_context` | `Dict[str, Any]` | runner | Platform metadata (bounty, freshness, competition) |
-| `strategy` | `Dict[str, Any]` | strategy_node | Focus areas, priority targets, depth-vs-breadth |
-| `guidance` | `List[str]` | all LLM nodes | Human-readable explanations (primary UX output) |
-| `phase_results` | `Dict[str, Dict]` | executor | Detailed per-phase output keyed by phase name |
-| `discovered_subdomains` | `List[str]` | phases | Accumulated subdomains |
-| `live_hosts` | `List[Dict]` | phases | Accumulated live hosts |
-| `findings` | `List[Dict]` | phases | Accumulated findings |
-| `phases_tried` | `List[str]` | executor | Ordered list of executed phases |
-| `next_action` | `str` | LLM nodes | What to do next |
-| `guidance` is the **primary UX contract**. Every LLM node appends to it. The stop_node adds a final summary.
+Responsibilities:
 
-### LLM Prompt Structure
+- FastAPI REST API and WebSocket server
+- LangGraph autonomous recon agent
+- All LLM calls via LangChain abstraction
+- mitmproxy addon (embedded, same process)
+- PostgreSQL via SQLAlchemy async
+- Phase pipeline orchestration
+- Business logic, repository pattern, services
 
-**Strategy prompt** includes: platform context (bounty range, scope stats, recently-added assets), available phases, and asks for strategy + guidance + next_action.
-
-**Triage prompt** includes: last phase result summary, overall progress, strategy, and asks for analysis + guidance + next_action.
-
-Both prompts require JSON output with `next_action` and `reasoning`. Strategy additionally requires `strategy` dict and `guidance` list. Triage additionally requires `analysis` dict and `guidance` list.
-
-### Guidance Output
-
-Guidance accumulates across all nodes and is the primary UX output. Example:
+Key libraries:
 
 ```
-Strategy guidance: "I'll focus on the 3 recently-added assets — they're less tested."
-Triage guidance:    "Found Django 3.2 on admin.example.com — known CVEs, running vuln scan."
-Stop guidance:      "Recon complete. 2 live hosts, 1 finding. Review in dashboard."
+fastapi uvicorn
+langchain langchain-anthropic langchain-openai langchain-google-genai
+langgraph
+anthropic openai
+sqlalchemy[asyncio] asyncpg alembic
+pydantic pydantic-settings
+mitmproxy
+aiohttp
+playwright  # fallback only — primary browser work is in browser-service
+typer rich
+ruff pytest pytest-asyncio
 ```
 
-### Platform Context Wiring
+### TypeScript / Node.js (browser service)
 
-`ReconAgentRunner.run_reconnaissance()` accepts `platform` and `program_handle` params. When provided:
-1. Creates a `PlatformManager` from settings
-2. Calls `client.fetch_scope(program_handle)` on HackerOne/Bugcrowd/Intigriti
-3. Enriches `program_scope` with platform asset lists
-4. Populates `platform_context` with: bounty min/max, asset counts, currency
-5. Passes everything into the initial `ReconState`
+**Runtime**: Node.js 22
+**Framework**: Express (thin HTTP wrapper)
+**Why TypeScript here**: Playwright's primary implementation is Node.js.
+The Python Playwright bindings are a port that lags behind. For real browser
+automation — TLS interception at the browser level, Chrome DevTools Protocol
+access, network event hooks — the Node.js API is more complete and reliable.
+This is not a preference. It is a technical correctness decision.
 
-The strategy_node's prompt includes platform_context so the LLM can make ROI-informed decisions.
+Responsibilities:
 
-### Strategy-Aware Phases
+- Autonomous browser agent loop (perceive → decide → act)
+- Network traffic interception via CDP
+- DOM analysis and form extraction
+- JS bundle static analysis (route extraction, API string extraction)
+- Source map detection and parsing
+- Exposes a simple HTTP API consumed by the Python backend
 
-Phases receive `state.strategy` and can adjust behavior:
-- `phase_1_passive`: prioritizes subdomains matching `priority_targets`
-- `phase_3_httpprobe`: probes priority targets first
-- Future phases can use `focus_areas` to select relevant tool templates
+This service is called by Python. Python does not do browser automation directly.
 
-### Phase Pipeline
+Key libraries:
 
-- Registered via `@register_phase(name, number, description, dependencies)` decorator
-- 7 phases: `phase_0_validate` → `phase_1_passive` → `phase_3_httpprobe` → `phase_4_content` → `phase_5_vulnscan` → `phase_6_scoring`
-- Each phase runs tools deterministically via `ToolRegistry` (no LLM calls)
-- Orchestrated by the graph: LLM chooses phase → executor runs it → triage interprets results
+```
+playwright
+express
+typescript
+@types/node @types/express
+source-map
+acorn  # JS AST parser for bundle analysis
+```
 
-## Database
+### Go (security tools)
 
-- SQLAlchemy async: models in `src/rekonstrike/database.py` (self-contained, not split per model)
-- Migrations via Alembic (`migrations/` dir, config at `alembic.ini`)
-- Key tables: `scope_targets`, `subdomains`, `live_hosts`, `scan_sessions`, `vulnerabilities`, `dns_records`
-- Repositories in `src/rekonstrike/repositories/` — `TargetRepository`, `SessionRepository`, `HostRepository`
-- `Database.get_session()` returns an `AsyncSession` directly (not an async generator). Use `async with db.get_session() as s:` (no `await`).
+**Why Go here**: subfinder, httpx, nuclei, katana, ffuf, dnsx, shuffledns,
+naabu, gospider, gau, amass, trufflehog — all written in Go, all
+battle-tested, all containerized. You do not reimplement these. You call them.
+Performance for network-intensive concurrent scanning (port scanning, DNS
+resolution at scale) is genuinely better in Go than Python.
 
-## CI
+These run as Docker containers. Python backend calls them via subprocess or
+Docker API, captures stdout, parses JSON output.
 
-`.github/workflows/ci.yml`: lint (`ruff check`) → test (`pytest tests/ -v --tb=short`) → frontend build (`npm ci && npm run build`) → docker build for each tool + API image.
+Never call Go tools directly from frontend or browser service.
+Always route through the Python backend.
 
-Quirk: CI assumes the repo is checked out inside a parent `rekonstrike/` directory (uses `working-directory: rekonstrike`, paths like `rekonstrike/requirements.txt`). Only matters if debugging CI.
+### React + TypeScript (frontend)
 
-## Docker
+Standard SPA. Communicates with Python backend via REST and WebSocket.
+WebSocket receives real-time scan events, agent guidance messages, and
+proxy capture progress.
 
-- `docker-compose.yml`: API + PostgreSQL 17 + Redis 7
-- `Dockerfile`: multi-stage — builds frontend (Node 22), then Python 3.14-slim runtime, then Nginx UI stage
-- Tool containers built per-tool via `docker/rekonstrike/tools/Dockerfile` (matrix of subfinder, httpx, nuclei, etc.)
+No direct communication with browser-service or Go tools.
 
-## External Tools
+### PostgreSQL
 
-Tool availability is managed externally; all are Go binaries except `cloud_enum` (Python) and `cewl` (Ruby gem). Tool wrappers are in `src/rekonstrike/tools/wrappers.py`. `ToolRunner` in `src/rekonstrike/runner.py` handles native subprocess and Docker execution with semaphore-based concurrency.
+Single database. All services that need persistence go through the Python
+backend's repository layer. The browser-service does not connect to the
+database directly — it returns results to Python which writes them.
 
-## Key Architecture Files
+---
 
-| File | Purpose |
-|------|---------|
-| `src/rekonstrike/agent/state.py` | `ReconState` — 14 fields across 5 categories (program context, strategy, execution, loop, metadata) |
-| `src/rekonstrike/agent/graph.py` | LangGraph StateGraph with 6 nodes: input → strategy → executor → triage → interrupt/stop |
-| `src/rekonstrike/agent/phases.py` | Phase registry with `@register_phase` decorator + 7 strategy-aware phase implementations |
-| `src/rekonstrike/agent/runner.py` | `ReconAgentRunner` — wraps graph.ainvoke with platform context sync + config setup |
-| `src/rekonstrike/agent/tools_base.py` | Abstract `ToolBase` with async execute/validate_input |
-| `src/rekonstrike/agent/tools.py` | `PassiveReconTool`, `HttpProbeTool` implementations |
-| `src/rekonstrike/agent/tool_registry.py` | `ToolRegistry` with 30s timeout, validation gate, structured logging |
-| `src/rekonstrike/agent/_graph_fallback.py` | Mock LangGraph when langgraph not installed |
-| `src/rekonstrike/config.py` | Pydantic Settings |
-| `src/rekonstrike/database.py` | SQLAlchemy async models + `Database` class |
-| `src/rekonstrike/platforms/manager.py` | `PlatformManager` — routes to HackerOne/Bugcrowd/Intigriti clients |
-| `src/rekonstrike/scope.py` | Wildcard/domain/CIDR scope matching |
-| `src/rekonstrike/scoring.py` | ROI scoring (50+ signals) |
-| `src/rekonstrike/engine.py` | Old pipeline + `@phase` decorator (legacy, agent uses agent/phases.py instead) |
-| `src/rekonstrike/api/server.py` | FastAPI app with lifespan + agent router |
-| `src/rekonstrike/api/routers/agent.py` | `POST /api/v1/targets/{id}/agent/run` — runs agent, returns state with guidance |
-| `src/rekonstrike/api/routers/ai.py` | Legacy fragmented AI endpoints (surface, triage, fp-filter, scope, advisor, report) |
-| `src/rekonstrike/api/deps.py` | FastAPI DI (repos, auth, DB session) |
-| `src/rekonstrike/services/scan_service.py` | Scan orchestration |
+## User workflow (implement in this order)
 
+### 1. Program analysis — optional, implement last
 
-## Current Implementation State (automated update)
+User connects HackerOne / Bugcrowd / Intigriti API key.
+Platform client fetches program list and scope data.
+Single LLM call analyzes each program: bounty range, scope quality, asset
+types, out-of-scope restrictions, recently disclosed reports as signal.
+Output: ranked recommendation with specific reasoning.
 
-- STEP 1 — Config: Completed. `src/rekonstrike/config.py` now exposes `Settings` fields and a `api_key(service)` helper. Environment parsing supports `RS_PLATFORM_KEYS__*`, `RS_AI_KEYS__*`, and `RS_AI_URLS__*`.
-- STEP 2 — Database: Completed. `src/rekonstrike/database.py` added `normalize_host()` and `AIVectorMemory` model. Alembic migration added at `migrations/versions/a1b2c3d4e5f6_add_ai_vector_memory.py`.
-- STEP 3 — API & platform fixes: Completed. Routers registered in `src/rekonstrike/api/server.py`. Fixed `platforms/base.py` exception clause. CI Python version adjusted in `.github/workflows/ci.yml`.
-- STEP 4 — Go filter: Completed. `filter/` contains a CLI binary (`main.go`), core filter logic (`filter.go`), schema (`schema.go`), tests (`filter_test.go`), and `Dockerfile`.
-- STEP 5 — Browser service: Completed. `browser-service/` provides a full Playwright-based headless capture service. `src/capture.ts` implements `captureSite()` with Chromium headless: captures full-page screenshot (base64), collects all HTTP request/response traffic (`raw_traffic`), extracts JS bundles from network responses and inline scripts, and discovers source maps (`source_maps`). Dockerfile installs system Chromium + Playwright. Service exposed on port 3001 in `docker-compose.yml`.
-- STEP 6 — Documentation: Completed. This `Current Implementation State` block documents all completed steps.
+LLM model: use a fast cheap model (haiku-class). Input is small and structured.
 
-Notes and next actions:
-- Tests: 35 unit tests pass (config, scope, scoring, engine). DB-dependent tests (database, agent) require PostgreSQL. Override URL via `TEST_DATABASE_URL`. CI should use a Postgres service. Alembic migrations must be applied to any Postgres used for testing or production.
-- Browser-service: Playwright capture is implemented. If you need to run it outside Docker, install Playwright browsers locally: `npx playwright install chromium`. The `CHROMIUM_PATH` env var can override the Chromium executable path.
-- CSS source map extraction is not yet implemented (JS source maps are the highest-value target).
-- Backward compatibility: Event payload shapes and WebSocket messages were flattened for easier UI consumption; ensure frontends are updated if they relied on the previous nested structure.
+### 2. Reconnaissance — core, largely done
+
+Deterministic pipeline. Phases 0–6 already implemented.
+AI touches two points only:
+
+- After httpx: triage pass to flag anomalous hosts
+- ROI scoring: prioritize discovered assets
+
+Do not add LLM calls to other phases. If you find yourself wanting to,
+the answer is a deterministic heuristic instead.
+
+### 3. Post-recon prioritization — core
+
+Single LLM call after recon completes.
+Input: structured recon output (subdomains, live hosts, tech stack, ROI scores,
+takeover findings, secret findings).
+Output: ranked target list with specific grounded reasoning.
+Model: haiku-class is sufficient. Input is structured, output is short.
+
+### 4. Authenticated surface mapping — core for web targets
+
+#### 4a. Embedded proxy (mitmproxy addon)
+
+User starts proxy via UI or CLI.
+Proxy runs on localhost:8080.
+User configures browser to use it (they know how — target users are technical).
+All traffic to in-scope domains is captured and written to the database.
+Out-of-scope traffic is silently passed through, never stored.
+
+The mitmproxy addon lives in proxy-service/addon.py.
+It imports from the Python backend to write directly to the database.
+It is not a separate service — it runs in the same Python process.
+
+Scope enforcement is not optional. Every captured request must be validated
+against the program's in-scope rules before storage. This is a hard requirement.
+
+Burp Suite XML export and Caido JSON export must be importable as an
+alternative to live proxy capture.
+
+#### 4b. JS bundle analysis (browser-service)
+
+After proxy capture, the Python backend sends captured JS bundle URLs to
+the browser-service.
+Browser-service fetches each bundle and runs static analysis:
+
+- React Router / Next.js route extraction
+- API endpoint string extraction (regex + AST)
+- Environment variable and config object detection
+- Source map detection — if .map file exists, fetch and parse it
+
+Results returned as structured JSON to Python backend, stored as
+discovered endpoints enriching the surface model.
+
+#### 4c. Browser agent (browser-service) — optional, implement last
+
+Only used when the user explicitly requests autonomous exploration.
+Python backend sends target URL and auth config to browser-service HTTP API.
+Browser-service runs the perceive → decide → act loop using Playwright.
+Each step streams progress back via HTTP chunked response or Redis queue.
+Python backend writes findings to database and streams to frontend via WebSocket.
+
+Token cost: use haiku-class for navigation decisions. Reserve opus-class
+for the final analysis call only.
+
+Hard constraints the browser agent must enforce:
+
+- Never navigate outside the target domain
+- Never click logout, delete, or any destructive action
+- Never submit forms with real sensitive data
+- Detect session expiry (redirect to login URL) and halt with clear error
+- Stuck detection: if URL unchanged for 3 consecutive steps, force navigation
+  to an unvisited link from the nav or sitemap
+
+### 5. AI-guided questioning — core
+
+After proxy capture and JS analysis complete, before running threat model.
+AI reviews collected surface data and identifies genuine gaps.
+Generates 3–5 targeted questions — not a generic checklist.
+Questions must be grounded in what was actually found.
+Bad: "what authentication mechanism does the app use?"
+Good: "we saw JWT tokens in Authorization headers but also a separate
+cookie-based session for the admin path — do these share the same
+validation logic?"
+
+User answers conversationally in the UI.
+Answers are stored and used as additional context for the threat model call.
+
+### 6. Attack surface modeling and threat modeling — core
+
+Single large LLM call. This is the most expensive call in the system.
+Use opus-class model here. The quality of this output is the core value
+proposition of the product.
+
+Input (all structured):
+
+- Recon output summary
+- Proxy-captured endpoints with methods, parameters, response shapes
+- JS bundle analysis results
+- User answers from questioning step
+- Program scope and bounty context
+
+Output (strict JSON schema):
+
+- Feature inventory
+- API endpoint map with parameter analysis
+- Auth and authorization boundary map
+- Data flow model
+- Threat model: per-feature vulnerability classes, specific concrete test cases,
+  priority ranking with reasoning
+
+Validate the output schema strictly. If the LLM returns malformed JSON,
+retry once with the schema reminder appended. Do not silently accept
+partial output.
+
+### 7. Guided testing workspace — core, largely designed
+
+User works through prioritized test cases.
+Guided checklists per vulnerability class (auth, injection, logic, infra).
+AI advisor available for questions during testing — this is a stateful
+conversation grounded in the specific target's surface model.
+Finding tracker for confirmed vulnerabilities.
+
+### 8. Report drafting — optional
+
+User marks finding confirmed.
+Single LLM call: haiku-class is sufficient for report structure,
+opus-class if quality of language matters to the user.
+Output formatted for target platform (HackerOne markdown, Bugcrowd format).
+
+---
+
+## AI usage rules — read before adding any LLM call
+
+**Use AI for:**
+
+- Program scoring and recommendation
+- Recon anomaly triage and ROI scoring
+- Post-recon target prioritization
+- Gap detection and targeted question generation
+- Attack surface modeling and threat modeling
+- Per-feature test suggestions during manual testing
+- Bug report drafting
+
+**Do not use AI for:**
+
+- Running reconnaissance tools (use subprocess)
+- Scope validation (use deterministic string matching)
+- Deduplication (use sets and DB unique constraints)
+- Parsing tool output (use JSON parsing and regex)
+- Any task a 10-line Python function can handle reliably
+
+**Model selection:**
+
+- haiku-class: navigation decisions, triage, ROI scoring, program analysis,
+  report drafting, any call where input is small and output is short
+- opus-class: attack surface modeling, threat modeling, any call where
+  reasoning quality directly determines the value of the output
+
+**Every LLM call must have:**
+
+- A defined input schema
+- A defined output schema (JSON with field descriptions)
+- A retry policy (once, with schema reminder on failure)
+- A fallback behavior (graceful degradation, not crash)
+
+**Token discipline:**
+
+- Never send raw HTML to the LLM. Extract and structure first.
+- Never send full tool output. Summarize or select relevant fields.
+- Never run the browser agent loop with opus-class. haiku-class for steps,
+  opus-class for the single final analysis call.
+- Cap proxy capture context sent to LLM: deduplicate by method+path,
+  max 200 unique endpoints, truncate long request bodies.
+
+---
+
+## Data flow between services
+
+```
+User browser (React UI)
+    ↕ REST + WebSocket
+Python backend (FastAPI)
+    ↕ subprocess / Docker API
+Go tool containers (subfinder, httpx, nuclei, etc.)
+    ↕ HTTP API
+TypeScript browser-service (Playwright)
+    ↕ mitmproxy addon (embedded in Python process)
+PostgreSQL
+```
+
+The Python backend is the single orchestrator. No service calls another
+service except through Python. The browser-service does not call Go tools.
+The frontend does not call the browser-service directly.
+
+---
+
+## Scope enforcement — non-negotiable
+
+Every component that touches the target must validate against scope.
+
+Python backend: validate every scan target against program in_scope and
+out_of_scope rules before dispatching to any tool.
+
+mitmproxy addon: validate every intercepted request before writing to DB.
+Out-of-scope requests are passed through silently, never stored.
+
+Browser agent: validate every navigation target before calling page.goto().
+Refuse to navigate outside the declared domain. Log the refusal.
+
+Scope rules live in the ProgramScope database model. Load them once per
+session and pass them through. Do not re-fetch from DB on every request.
+
+---
+
+## What is implemented and working
+
+- FastAPI server with health endpoint
+- Database models (all tables defined)
+- Repository pattern (TargetRepository, HostRepository, SessionRepository)
+- Recon phase pipeline (phases 0–7 scaffolded, phases 1–5 functional)
+- LangGraph agent (strategy → executor → triage loop)
+- Tool wrappers (all Go tools wrapped, mock fallback when tool not installed)
+- ROI scoring engine
+- Platform clients (HackerOne, Bugcrowd, Intigriti)
+- AI agent layer (triage, surface, advisor, report agents scaffolded)
+- CI pipeline (lint, test, build-frontend, docker)
+
+## What needs to be built
+
+- mitmproxy embedded addon (proxy-service/addon.py)
+- Burp XML and Caido JSON import endpoints
+- TypeScript browser-service (entire service)
+- JS bundle static analysis
+- AI-guided questioning flow (API endpoint + frontend UI)
+- Attack surface modeling endpoint (the large threat model call)
+- Proxy capture UI (start/stop proxy, coverage visibility)
+- Guided testing workspace frontend
+- Program analysis and recommendation feature
+- Report drafting endpoint and UI
+
+## What needs to be fixed
+
+- config.py is missing: platform_api_keys, auth_cookie, auth_token,
+  auth_local_storage, max_subdomains, data_dir, scope_file, platform,
+  program_handle, db_type fields referenced in phases but not defined
+- database.py: normalize_host function referenced in phases but not defined
+- database.py: AIVectorMemory model referenced in memory.py but not defined
+- host_repo.py: HostRepository constructor takes db_type in some phases
+  but not in its current definition
+- platforms/base.py: syntax error on bare except clause (line with
+  aiohttp.ClientError, asyncio.TimeoutError — missing parentheses)
+- api/server.py: only agent router is registered — scans, targets, ai
+  routers are missing from include_router calls
+- ci.yml: PYTHON_VERSION set to 3.14 which does not exist yet — use 3.13
