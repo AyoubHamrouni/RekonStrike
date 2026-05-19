@@ -3,14 +3,14 @@
 ## Core Principles
 1. **PostgreSQL-only** — All data persists to PostgreSQL via asyncpg + SQLAlchemy async
 2. **Autonomous agent-driven** — LangGraph handles multi-tool coordination
-3. **Web UI primary** — All user interaction goes through React + WebSocket, not CLI
+3. **Web UI primary** — All user interaction goes through Next.js + WebSocket, not CLI
 4. **Multi-model LLM** — Support Anthropic, OpenAI, Google Gemini via LangChain
 
 ## Technology Stack
 - **Backend:** FastAPI (async) + SQLAlchemy ORM (async) + PostgreSQL
 - **Agent:** LangGraph (StatieGraph) + LangChain (model abstraction)
 - **API:** RESTful routes + WebSocket for real-time agent communication
-- **Frontend:** React + TypeScript + TailwindCSS
+- **Frontend:** Next.js + React + TypeScript + TailwindCSS
 - **Infrastructure:** Docker Compose (PostgreSQL + Redis + app)
 
 ## Data Model
@@ -39,4 +39,4 @@
 - [ ] Spike 2: ReconState + StateGraph
 - [ ] Spike 3: Agent runner + end-to-end test
 - [ ] API routers (scan, targets, platforms, ai, ws)
-- [ ] React UI for agent 
+- [ ] Next.js UI for agent

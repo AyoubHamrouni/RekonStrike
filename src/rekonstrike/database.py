@@ -1,8 +1,9 @@
 from datetime import datetime
 from functools import lru_cache
 from typing import Optional
+from uuid import uuid4
 from sqlalchemy import (
-    String, Boolean, Integer, ForeignKey, DateTime, Text, JSON, func, UniqueConstraint
+    String, Boolean, Integer, ForeignKey, DateTime, Text, JSON, func, UniqueConstraint, Index, LargeBinary
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
@@ -106,6 +107,14 @@ class Program(Base):
     scopes: Mapped[list["ProgramScope"]] = relationship(
         back_populates="program", cascade="all, delete-orphan"
     )
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, unique=True)
+    display_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
 
 class ProgramScope(Base):
@@ -255,6 +264,33 @@ class SecretFinding(Base):
     redacted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="unverified")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+class RawHTTPCapture(Base):
+    __tablename__ = "raw_http_captures"
+    __table_args__ = (
+        Index("ix_raw_http_program_timestamp", "program_id", "timestamp"),
+        Index("ix_raw_http_hostname_scope", "hostname", "scope_matched"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    program_id: Mapped[int] = mapped_column(
+        ForeignKey("programs.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    method: Mapped[str] = mapped_column(String(16))
+    url: Mapped[str] = mapped_column(Text)
+    hostname: Mapped[str] = mapped_column(String(255), index=True)
+    path: Mapped[str] = mapped_column(Text)
+    query_string: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    headers: Mapped[dict] = mapped_column(JSON, default=dict)
+    body: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
+    body_size: Mapped[int] = mapped_column(Integer, default=0)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=func.now(), index=True)
+    scope_matched: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    captured_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), index=True)
 
 
 class TakeoverFinding(Base):

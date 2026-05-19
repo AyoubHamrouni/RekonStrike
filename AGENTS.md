@@ -93,7 +93,7 @@ rekonstrike/
 │   ├── addon.py               # scope-filtered traffic capture addon
 │   └── README.md
 │
-├── ui/                        # React + TypeScript frontend
+├── ui/                        # Next.js + TypeScript frontend
 │   ├── src/
 │   │   ├── components/
 │   │   ├── pages/
@@ -192,9 +192,9 @@ Docker API, captures stdout, parses JSON output.
 Never call Go tools directly from frontend or browser service.
 Always route through the Python backend.
 
-### React + TypeScript (frontend)
+### Next.js + TypeScript (frontend)
 
-Standard SPA. Communicates with Python backend via REST and WebSocket.
+Server-rendered frontend with client-side interactivity. Communicates with Python backend via REST and WebSocket.
 WebSocket receives real-time scan events, agent guidance messages, and
 proxy capture progress.
 

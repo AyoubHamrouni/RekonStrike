@@ -177,7 +177,7 @@ src/rekonstrike/
 
 browser-service/  Playwright headless capture service
 filter/           Go-based result filtering CLI
-ui/               React + TypeScript + Vite + Tailwind frontend
+ui/               Next.js + TypeScript + Tailwind frontend
 ```
 
 ---

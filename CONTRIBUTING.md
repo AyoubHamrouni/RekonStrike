@@ -70,7 +70,7 @@ rekonstrike/
 │       ├── engine.py     # Pipeline
 │       ├── schemas.py    # Pydantic models
 │       └── tasks.py      # Background tasks
-├── ui/                   # React + Vite frontend
+├── ui/                   # Next.js frontend
 ├── docker/               # Tool isolation containers
 ├── tests/                # Automated test suite
 └── migrations/           # Alembic database migrations
@@ -79,7 +79,7 @@ rekonstrike/
 ## Code Style
 
 - **Python**: Follow PEP 8, use strict type hints, follow the Repository pattern for all DB access.
-- **JavaScript/React**: Functional components, hooks, modern state management.
+- **JavaScript/React/Next.js**: Functional components, hooks, modern state management, and framework-aware routing.
 - **Components**: Maximum 300 lines per file to ensure maintainability.
 - **Testing**: New features should include unit tests for repositories and services.
 
