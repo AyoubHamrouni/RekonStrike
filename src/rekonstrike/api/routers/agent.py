@@ -28,8 +28,8 @@ class AgentSession:
         self.target_id: int = target_id
         self.target_domain: str = target_domain
         self.status: str = "pending"
-        self.event_queue: asyncio.Queue = asyncio.Queue()
-        self.feedback_queue: asyncio.Queue = asyncio.Queue()
+        self.event_queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+        self.feedback_queue: asyncio.Queue = asyncio.Queue(maxsize=100)
         self.task: asyncio.Task | None = None
         self.final_state: dict | None = None
         self.error: str | None = None
@@ -49,17 +49,31 @@ class AgentSession:
 class AgentSessionManager:
     def __init__(self):
         self._sessions: dict[int, AgentSession] = {}
+        self.ttl_seconds = 3600
 
     def create(self, session_id: int, target_id: int, target_domain: str) -> AgentSession:
+        self.prune()
         session = AgentSession(session_id, target_id, target_domain)
         self._sessions[session.session_id] = session
         return session
 
     def get(self, session_id: int) -> AgentSession | None:
+        self.prune()
         return self._sessions.get(session_id)
 
     def remove(self, session_id: int):
         self._sessions.pop(session_id, None)
+
+    def prune(self):
+        now = time.time()
+        expired = [
+            sid
+            for sid, session in self._sessions.items()
+            if session.status in {"completed", "error", "interrupted"}
+            and now - session.created_at > self.ttl_seconds
+        ]
+        for sid in expired:
+            self.remove(sid)
 
 
 _session_manager = AgentSessionManager()

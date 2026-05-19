@@ -43,7 +43,7 @@ class Phase:
         out.success("Target validated and pipeline initialized")
 
     async def _load_scope_file(self, path: Path):
-        from ..database import ProgramScope
+        from ..database import Program, ProgramScope
 
         try:
             data = json.loads(path.read_text())
@@ -84,8 +84,26 @@ class Phase:
 
         # Persist to ProgramScope table
         async with self.ctx.db_session.begin():
+            program = await self.ctx.db_session.scalar(
+                select(Program).where(
+                    Program.scope_target_id == self.ctx.target_id,
+                    Program.platform == (self.ctx.settings.platform or "manual"),
+                    Program.program_handle == (
+                        self.ctx.settings.program_handle or self.ctx.target
+                    ),
+                )
+            )
+            if program is None:
+                program = Program(
+                    scope_target_id=self.ctx.target_id,
+                    platform=self.ctx.settings.platform or "manual",
+                    program_handle=self.ctx.settings.program_handle or self.ctx.target,
+                    program_name=self.ctx.settings.program_handle or self.ctx.target,
+                )
+                self.ctx.db_session.add(program)
+                await self.ctx.db_session.flush()
             existing = await self.ctx.db_session.execute(
-                select(ProgramScope).where(ProgramScope.target_id == self.ctx.target_id)
+                select(ProgramScope).where(ProgramScope.program_id == program.id)
             )
             ps = existing.scalar_one_or_none()
             if ps:
@@ -93,9 +111,7 @@ class Phase:
                 ps.out_of_scope = out_of_scope_rules
             else:
                 ps = ProgramScope(
-                    target_id=self.ctx.target_id,
-                    platform=self.ctx.settings.platform or "manual",
-                    program_handle=self.ctx.settings.program_handle or self.ctx.target,
+                    program_id=program.id,
                     in_scope=in_scope_rules,
                     out_of_scope=out_of_scope_rules,
                 )

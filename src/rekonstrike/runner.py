@@ -4,6 +4,7 @@ import asyncio
 import time
 import json
 import shutil
+import re
 from typing import Optional, Callable
 
 from .config import Settings
@@ -50,6 +51,7 @@ class ToolRunner:
         self._semaphore = asyncio.Semaphore(settings.tool_concurrency)
         self._mode = settings.tool_mode
         self._docker_available = bool(shutil.which("docker"))
+        self._tool_name_re = re.compile(r"^[a-zA-Z0-9_.-]+$")
 
     def is_available(self, tool: str) -> bool:
         if self._mode == "docker":
@@ -64,6 +66,8 @@ class ToolRunner:
         stdin: Optional[str] = None,
         on_line: Optional[Callable[[str], None]] = None,
     ) -> ToolResult:
+        if not self._tool_name_re.match(tool):
+            return ToolResult(tool, -1, "", "invalid tool name", tool, 0)
         async with self._semaphore:
             if self._mode == "docker" and self._docker_available:
                 return await self._run_docker(tool, args, timeout, stdin, on_line)
@@ -101,14 +105,25 @@ class ToolRunner:
                 proc.stdin.close()
 
             stdout_data: list[str] = []
+            stderr_data: list[str] = []
+            stdout_bytes = 0
+            stderr_bytes = 0
 
             async def _reader(stream, is_stderr=False):
+                nonlocal stdout_bytes, stderr_bytes
                 while True:
                     line = await stream.readline()
                     if not line:
                         break
                     decoded = line.decode("utf-8", errors="replace").rstrip()
-                    if not is_stderr:
+                    if is_stderr:
+                        stderr_bytes += len(line)
+                        if stderr_bytes <= self.settings.tool_max_output_bytes:
+                            stderr_data.append(decoded)
+                    else:
+                        stdout_bytes += len(line)
+                        if stdout_bytes > self.settings.tool_max_output_bytes:
+                            continue
                         stdout_data.append(decoded)
                         if on_line:
                             on_line(decoded)
@@ -127,7 +142,7 @@ class ToolRunner:
                 tool,
                 proc.returncode or 0,
                 "\n".join(stdout_data),
-                "",
+                "\n".join(stderr_data),
                 " ".join(cmd),
                 round(elapsed, 2),
             )
@@ -160,7 +175,21 @@ class ToolRunner:
         stdin: Optional[str],
         on_line: Optional[Callable],
     ) -> ToolResult:
-        cmd = ["docker", "run", "--rm", "-i", f"rekonstrike/{tool}:latest"] + args
+        cmd = [
+            "docker",
+            "run",
+            "--rm",
+            "-i",
+            "--memory",
+            "512m",
+            "--cpus",
+            "1.0",
+            "--pids-limit",
+            "256",
+            "--security-opt",
+            "no-new-privileges",
+            f"rekonstrike/{tool}:latest",
+        ] + args
         start = time.monotonic()
         to = timeout or self.settings.tool_timeout
 
@@ -179,14 +208,25 @@ class ToolRunner:
                 proc.stdin.close()
 
             stdout_data: list[str] = []
+            stderr_data: list[str] = []
+            stdout_bytes = 0
+            stderr_bytes = 0
 
             async def _reader(stream, is_stderr=False):
+                nonlocal stdout_bytes, stderr_bytes
                 while True:
                     line = await stream.readline()
                     if not line:
                         break
                     decoded = line.decode("utf-8", errors="replace").rstrip()
-                    if not is_stderr:
+                    if is_stderr:
+                        stderr_bytes += len(line)
+                        if stderr_bytes <= self.settings.tool_max_output_bytes:
+                            stderr_data.append(decoded)
+                    else:
+                        stdout_bytes += len(line)
+                        if stdout_bytes > self.settings.tool_max_output_bytes:
+                            continue
                         stdout_data.append(decoded)
                         if on_line:
                             on_line(decoded)
@@ -205,7 +245,7 @@ class ToolRunner:
                 tool,
                 proc.returncode or 0,
                 "\n".join(stdout_data),
-                "",
+                "\n".join(stderr_data),
                 " ".join(cmd),
                 round(elapsed, 2),
             )

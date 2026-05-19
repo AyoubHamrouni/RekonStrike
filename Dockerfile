@@ -11,7 +11,7 @@ ENV API_PROXY_TARGET=$API_PROXY_TARGET
 RUN npm run build
 
 # ── Stage 2: Python runtime (API server) ──────────────────────────────────
-FROM python:3.14-slim AS api
+FROM python:3.13-slim AS api
 
 WORKDIR /app
 ENV PYTHONPATH=/app/src
@@ -39,7 +39,16 @@ EXPOSE 8000
 
 CMD ["python3", "-m", "rekonstrike", "serve", "--host", "0.0.0.0", "--port", "8000"]
 
-# ── Stage 3: Next.js UI server ────────────────────────────────────────────
+# ── Stage 3: mitmproxy capture service ────────────────────────────────────
+FROM api AS proxy
+
+COPY proxy-service/ proxy-service/
+
+EXPOSE 8080
+
+CMD ["mitmdump", "-s", "proxy-service/addon.py", "--listen-host", "0.0.0.0", "--listen-port", "8080"]
+
+# ── Stage 4: Next.js UI server ────────────────────────────────────────────
 FROM node:22-alpine AS ui
 
 WORKDIR /app

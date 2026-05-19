@@ -53,14 +53,18 @@ class Settings(BaseSettings):
 
     # API server auth (empty = no auth required)
     server_api_key: str = ""
+    allow_insecure_dev_auth: bool = False
+    cors_origins: str = "http://localhost:3000"
 
     # Tool execution
     tool_concurrency: int = 5
     tool_timeout: int = 300
     tool_mode: str = "native"
+    tool_max_output_bytes: int = 5_000_000
 
     # Browser capture service
-    browser_service_url: str = "http://localhost:3001"
+    browser_service_url: str = ""
+    browser_service_token: str = ""
 
     @property
     def configured_providers(self) -> list[str]:
@@ -77,6 +81,14 @@ class Settings(BaseSettings):
         """Return an API key for a given service by checking platform and AI key maps."""
         svc = service.lower()
         return self.platform_api_keys.get(svc) or self.ai_api_keys.get(svc) or ""
+
+    @property
+    def api_keys(self) -> Dict[str, str]:
+        return {**self.platform_api_keys, **self.ai_api_keys}
+
+    @property
+    def db_url(self) -> str:
+        return self.database_url
 
 def load_settings() -> Settings:
     # Do not cache to allow tests and runtime to change env vars between calls.

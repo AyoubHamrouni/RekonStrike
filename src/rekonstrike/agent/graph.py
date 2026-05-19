@@ -71,6 +71,22 @@ def _parse_llm_json(content: str) -> dict:
         raise ValueError("Invalid JSON response from LLM") from e
 
 
+def _safe_json(value, max_chars: int = 12000) -> str:
+    text = json.dumps(value, indent=2, default=str)
+    if len(text) > max_chars:
+        return text[:max_chars] + "\n... truncated ..."
+    return text
+
+
+def _validated_next_action(action: str, fallback: str = "interrupt") -> str:
+    allowed = {p["name"] for p in list_phases()} | {
+        "interrupt",
+        "stop",
+        "re_strategize",
+    }
+    return action if action in allowed else fallback
+
+
 def _phases_prompt_block(tried: list[str] | None = None) -> str:
     lines = ["Available phases:"]
     for p in list_phases():
@@ -104,7 +120,7 @@ Target domain: {state.target_domain}
 Goal: {state.goal}
 
 Platform context:
-{json.dumps(state.platform_context, indent=2) if state.platform_context else '  No platform data available — operating with default scope.'}
+{_safe_json(state.platform_context) if state.platform_context else '  No platform data available - operating with default scope.'}
 
 In-scope assets: {state.program_scope.get('in_scope', [])}
 Out-of-scope: {state.program_scope.get('out_of_scope', [])}
@@ -143,7 +159,7 @@ Respond ONLY with valid JSON:
         llm = get_llm(settings, temperature=0.0)
         response = await llm.ainvoke([SystemMessage(content=prompt)])
         parsed = _parse_llm_json(response.content)
-        next_action = parsed.get("next_action", "interrupt")
+        next_action = _validated_next_action(parsed.get("next_action", "interrupt"))
         reasoning = parsed.get("reasoning", "")
         strategy = parsed.get("strategy", {})
         guidance = parsed.get("guidance", [])
@@ -209,7 +225,7 @@ Current state:
 
 Last phase completed: {last_phase or 'none'}
 Phase result summary:
-{json.dumps(last_result, indent=2) if last_result else '  No results yet.'}
+{_safe_json(last_result) if last_result else '  No results yet.'}
 
 Overall progress:
 - Subdomains discovered: {len(state.discovered_subdomains)}
@@ -218,7 +234,7 @@ Overall progress:
 - Phases executed: {state.phases_tried or 'none'}
 
 Strategy:
-{json.dumps(state.strategy, indent=2) if state.strategy else '  Not set.'}
+{_safe_json(state.strategy) if state.strategy else '  Not set.'}
 
 {_phases_prompt_block(state.phases_tried)}
 
@@ -251,7 +267,7 @@ Respond ONLY with valid JSON:
         llm = get_llm(settings, temperature=0.0)
         response = await llm.ainvoke([SystemMessage(content=prompt)])
         parsed = _parse_llm_json(response.content)
-        next_action = parsed.get("next_action", "stop")
+        next_action = _validated_next_action(parsed.get("next_action", "stop"), fallback="stop")
         reasoning = parsed.get("reasoning", "")
         guidance = parsed.get("guidance", [])
     except Exception as e:

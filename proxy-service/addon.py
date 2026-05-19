@@ -110,7 +110,7 @@ def _is_sensitive_header(key: str) -> bool:
         return True
     if any(key.startswith(prefix) for prefix in SENSITIVE_PREFIX):
         return True
-    return any(token in key for token in SENSITIVE_CONTAINS) and key.startswith("x-")
+    return any(token in key for token in SENSITIVE_CONTAINS)
 
 
 class RekonStrikeCaptureAddon:

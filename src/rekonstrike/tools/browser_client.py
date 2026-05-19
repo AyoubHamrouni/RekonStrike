@@ -5,8 +5,9 @@ logger = logging.getLogger(__name__)
 
 
 class BrowserCaptureClient:
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, token: str = ""):
         self.base_url = base_url.rstrip("/")
+        self.token = token
 
     async def capture(self, target_url: str, max_steps: int = 3) -> dict[str, Any]:
         import aiohttp
@@ -17,10 +18,12 @@ class BrowserCaptureClient:
         }
 
         try:
+            headers = {"Authorization": f"Bearer {self.token}"} if self.token else None
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{self.base_url}/capture",
                     json=payload,
+                    headers=headers,
                     timeout=aiohttp.ClientTimeout(total=60),
                 ) as resp:
                     if resp.status != 200:

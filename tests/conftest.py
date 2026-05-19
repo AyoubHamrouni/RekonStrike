@@ -14,19 +14,18 @@ from rekonstrike.runner import ToolRunner
 
 
 def _test_db_url() -> str:
-    return os.environ.get(
-        "TEST_DATABASE_URL",
-        "postgresql+asyncpg://vulnbank:vulnbank_password@localhost:5432/rekonstrike_test",
-    )
+    return os.environ.get("TEST_DATABASE_URL", "")
 
 
 @pytest.fixture
 def settings() -> Settings:
-    return Settings(database_url=_test_db_url())
+    return Settings(database_url=_test_db_url() or "sqlite+aiosqlite:///:memory:")
 
 
 @pytest_asyncio.fixture
 async def db(settings: Settings) -> AsyncGenerator[Database, None]:
+    if not _test_db_url():
+        pytest.skip("TEST_DATABASE_URL is required for async DB integration tests")
     database = Database(settings.database_url)
     await database.create_all()
     yield database

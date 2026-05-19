@@ -1,8 +1,8 @@
 from typing import Optional, Sequence, Any
 from sqlalchemy import select, func
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from ..database import LiveHost, Vulnerability, Subdomain
+from ..database import LiveHost, Vulnerability
 
 
 class HostRepository:
@@ -13,23 +13,35 @@ class HostRepository:
         if not rows:
             return
 
-        stmt = (
-            pg_insert(LiveHost)
-            .values(rows)
-            .on_conflict_do_nothing(index_elements=["url"])
-        )
-        await self.session.execute(stmt)
+        bind = self.session.get_bind()
+        dialect = bind.dialect.name if bind is not None else ""
+        if dialect == "postgresql":
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            stmt = (
+                pg_insert(LiveHost)
+                .values(rows)
+                .on_conflict_do_nothing(index_elements=["url"])
+            )
+            await self.session.execute(stmt)
+            return
+
+        for row in rows:
+            existing = await self.session.scalar(
+                select(LiveHost).where(LiveHost.url == row["url"])
+            )
+            if existing is None:
+                await self.session.execute(insert(LiveHost).values(row))
 
     async def get_live_hosts(
         self, target_id: int, page: int = 0, size: int = 50
     ) -> tuple[Sequence[LiveHost], int]:
-        stmt = select(LiveHost).join(Subdomain).where(Subdomain.target_id == target_id)
+        stmt = select(LiveHost).where(LiveHost.target_id == target_id)
 
         count_stmt = (
             select(func.count())
             .select_from(LiveHost)
-            .join(Subdomain)
-            .where(Subdomain.target_id == target_id)
+            .where(LiveHost.target_id == target_id)
         )
         total = (await self.session.execute(count_stmt)).scalar() or 0
 
@@ -46,17 +58,13 @@ class HostRepository:
     ) -> tuple[Sequence[Vulnerability], int]:
         stmt = (
             select(Vulnerability)
-            .join(LiveHost)
-            .join(Subdomain)
-            .where(Subdomain.target_id == target_id)
+            .where(Vulnerability.target_id == target_id)
         )
 
         count_stmt = (
             select(func.count())
             .select_from(Vulnerability)
-            .join(LiveHost)
-            .join(Subdomain)
-            .where(Subdomain.target_id == target_id)
+            .where(Vulnerability.target_id == target_id)
         )
         if severity:
             stmt = stmt.where(Vulnerability.severity == severity)

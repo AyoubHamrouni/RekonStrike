@@ -43,15 +43,14 @@ class Phase:
         if waf.is_available:
             for host in hosts:
                 sc = host.get("status_code")
-            if sc in (200, 403):
-                url = host.get("url", "")
-                if url:
-                    wafs = await waf.detect(url)
-                if wafs:
-                    host["waf_detected"] = wafs
-                    existing = host.get("response_headers") or {}
-                    existing.setdefault("waf", wafs)
-                    host["response_headers"] = existing
+                if sc in (200, 403):
+                    url = host.get("url", "")
+                    wafs = await waf.detect(url) if url else []
+                    if wafs:
+                        host["waf_detected"] = wafs
+                        existing = host.get("response_headers") or {}
+                        existing.setdefault("waf", wafs)
+                        host["response_headers"] = existing
 
         from ..database import normalize_host
 
@@ -64,6 +63,7 @@ class Phase:
             rows.append(
                 {
                     "url": url,
+                    "target_id": self.ctx.target_id,
                     "raw_url": raw_url,
                     "status_code": host.get("status_code"),
                     "title": host.get("title", ""),
@@ -76,10 +76,8 @@ class Phase:
 
         if rows:
             async with self.ctx.db_session.begin():
-                repo = HostRepository(
-                    self.ctx.db_session, db_type=self.ctx.settings.db_type
-                )
-            await repo.add_live_hosts(rows)
+                repo = HostRepository(self.ctx.db_session)
+                await repo.add_live_hosts(rows)
 
         live_count = len(rows)
         urls = sorted({h.get("url", "") for h in hosts if h.get("url")})

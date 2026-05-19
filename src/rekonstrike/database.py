@@ -51,11 +51,17 @@ class LiveHost(Base):
         ForeignKey("subdomains.id", ondelete="SET NULL"), nullable=True
     )
     url: Mapped[str] = mapped_column(String(1024))
+    raw_url: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
     status_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     technologies: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    content_length: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    web_server: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    response_headers: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     response_time_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     waf_detected: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    screenshot_path: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    ssl_info: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     roi_score: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
@@ -148,6 +154,8 @@ class ScanSession(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="running")
+    current_phase: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    stats: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     step_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
@@ -169,6 +177,7 @@ class Vulnerability(Base):
     matched_at: Mapped[Optional[str]] = mapped_column(String(1024), nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     proof_of_concept: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    curl_command: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="unverified")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
@@ -271,6 +280,7 @@ class RawHTTPCapture(Base):
     __table_args__ = (
         Index("ix_raw_http_program_timestamp", "program_id", "timestamp"),
         Index("ix_raw_http_hostname_scope", "hostname", "scope_matched"),
+        UniqueConstraint("program_id", "user_id", "timestamp", name="uq_raw_http_program_user_ts"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))

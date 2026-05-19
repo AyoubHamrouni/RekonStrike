@@ -64,7 +64,8 @@ async def get_subdomains(
                 "subdomain": r.subdomain,
                 "source": r.source,
                 "resolved": r.resolved,
-                "ip_address": r.ip_address,
+                "ip_address": (r.ip_addresses or [None])[0],
+                "ip_addresses": r.ip_addresses or [],
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
             for r in items

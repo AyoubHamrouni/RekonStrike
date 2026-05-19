@@ -1,7 +1,7 @@
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
-from ..deps import verify_auth, get_scan_service, get_session_repo
+from ..deps import verify_auth, get_scan_service, get_session_repo, settings
 from ..manager import manager
 from ...services.scan_service import ScanService
 from ...repositories.session_repo import SessionRepository
@@ -60,6 +60,14 @@ async def cancel_scan(
 
 @router.websocket("/ws/{session_id}")
 async def ws_scan(ws: WebSocket, session_id: int):
+    if settings.server_api_key:
+        token = ws.query_params.get("token")
+        if token != settings.server_api_key:
+            await ws.close(code=1008)
+            return
+    elif not settings.allow_insecure_dev_auth:
+        await ws.close(code=1011)
+        return
     await manager.connect(session_id, ws)
     try:
         while True:

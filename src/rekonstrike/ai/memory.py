@@ -50,6 +50,8 @@ class MemoryService:
         """Adds a new memory to the vector store."""
         if not self.enabled:
             return
+        if target_id is None:
+            raise ValueError("target_id is required for memory writes")
 
         doc = Document(
             page_content=content,
@@ -81,8 +83,9 @@ class MemoryService:
         filter_dict = {}
         if memory_type:
             filter_dict["memory_type"] = memory_type
-        if target_id:
-            filter_dict["target_id"] = target_id
+        if target_id is None:
+            raise ValueError("target_id is required for memory searches")
+        filter_dict["target_id"] = target_id
             
         try:
             results = await self.vector_store.asimilarity_search(
@@ -95,9 +98,14 @@ class MemoryService:
             logger.error(f"Failed to search memory: {e}")
             return []
 
-    async def get_triage_context(self, finding_summary: str) -> str:
+    async def get_triage_context(self, finding_summary: str, target_id: int) -> str:
         """Retrieves past triage decisions to provide context for the current triage agent."""
-        similar = await self.search_similar(finding_summary, limit=3, memory_type="triage_decision")
+        similar = await self.search_similar(
+            finding_summary,
+            limit=3,
+            memory_type="triage_decision",
+            target_id=target_id,
+        )
         if not similar:
             return "No similar past findings found."
             

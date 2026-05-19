@@ -1,4 +1,6 @@
 import { chromium, Page } from "playwright";
+import dns from "node:dns/promises";
+import net from "node:net";
 
 export interface CaptureRequest {
   target_url: string;
@@ -37,6 +39,7 @@ export interface CaptureResult {
 
 const MAX_BODY_SIZE = 500_000;
 const NAVIGATION_TIMEOUT = 30_000;
+const ALLOWED_SCHEMES = new Set(["http:", "https:"]);
 
 function truncateBody(body: string): string {
   if (body.length > MAX_BODY_SIZE) {
@@ -45,7 +48,77 @@ function truncateBody(body: string): string {
   return body;
 }
 
+function isPrivateIPv4(ip: string): boolean {
+  const parts = ip.split(".").map((p) => Number(p));
+  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p))) return true;
+  const [a, b] = parts;
+  return (
+    a === 10 ||
+    a === 127 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) ||
+    a === 0
+  );
+}
+
+function isPrivateIPv6(ip: string): boolean {
+  const v = ip.toLowerCase();
+  return v === "::1" || v.startsWith("fc") || v.startsWith("fd") || v.startsWith("fe80:");
+}
+
+async function assertCaptureAllowed(req: CaptureRequest): Promise<void> {
+  const parsed = new URL(req.target_url);
+  if (!ALLOWED_SCHEMES.has(parsed.protocol)) {
+    throw new Error("unsupported target_url scheme");
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (req.scope?.length) {
+    const allowed = req.scope.some((rule) => {
+      const r = rule.toLowerCase().replace(/^\*\./, "");
+      return host === r || host.endsWith(`.${r}`);
+    });
+    if (!allowed) throw new Error("target_url is outside provided scope");
+  }
+
+  const directIpVersion = net.isIP(host);
+  const addresses = directIpVersion
+    ? [{ address: host, family: directIpVersion }]
+    : await dns.lookup(host, { all: true });
+  for (const addr of addresses) {
+    if (addr.family === 4 && isPrivateIPv4(addr.address)) {
+      throw new Error("target_url resolves to private IPv4 address");
+    }
+    if (addr.family === 6 && isPrivateIPv6(addr.address)) {
+      throw new Error("target_url resolves to private IPv6 address");
+    }
+  }
+}
+
+function redactHeaders(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    const k = key.toLowerCase();
+    if (
+      k === "authorization" ||
+      k === "cookie" ||
+      k === "set-cookie" ||
+      k === "proxy-authorization" ||
+      k === "x-api-key" ||
+      k.startsWith("x-auth-") ||
+      k.includes("token") ||
+      k.includes("secret") ||
+      k.includes("key")
+    ) {
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
 export async function captureSite(req: CaptureRequest): Promise<CaptureResult> {
+  await assertCaptureAllowed(req);
   const browser = await chromium.launch({
     headless: true,
     executablePath: process.env.CHROMIUM_PATH || undefined,
@@ -70,7 +143,7 @@ export async function captureSite(req: CaptureRequest): Promise<CaptureResult> {
       url,
       method: request.method(),
       status: 0,
-      headers: Object.fromEntries(Object.entries(request.headers())),
+      headers: redactHeaders(Object.fromEntries(Object.entries(request.headers()))),
     });
   });
 
@@ -79,7 +152,7 @@ export async function captureSite(req: CaptureRequest): Promise<CaptureResult> {
     const existing = rawTraffic.find((r) => r.url === url && r.status === 0);
     if (existing) {
       existing.status = response.status();
-      existing.headers = Object.fromEntries(Object.entries(response.headers()));
+      existing.headers = redactHeaders(Object.fromEntries(Object.entries(response.headers())));
     }
 
     const contentType = response.headers()["content-type"] || "";

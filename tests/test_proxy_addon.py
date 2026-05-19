@@ -1,4 +1,6 @@
 import importlib.util
+import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,84 +14,95 @@ def _load_addon_module():
     return mod
 
 
-def test_scrub_headers_removes_sensitive_keys():
-    mod = _load_addon_module()
-    headers = {
-        "Authorization": "Bearer x",
-        "Cookie": "a=b",
-        "X-API-Key": "k",
-        "X-Auth-Custom": "v",
-        "Content-Type": "application/json",
-    }
-    scrubbed, count = mod.scrub_headers(headers)
-    assert count == 4
-    assert "Authorization" not in scrubbed
-    assert "Cookie" not in scrubbed
-    assert "X-API-Key" not in scrubbed
-    assert "X-Auth-Custom" not in scrubbed
-    assert scrubbed["Content-Type"] == "application/json"
-
-
-def test_scope_matcher_domain_and_path_glob():
-    mod = _load_addon_module()
-    matcher = mod.ScopeMatcher.from_scope_lists(
-        in_scope=["*.example.com/api/*", "example.com/login"],
-        out_of_scope=["admin.example.com/*"],
-    )
-    assert matcher.matches("api.example.com", "/api/v1/users")
-    assert matcher.matches("example.com", "/login")
-    assert not matcher.matches("example.com", "/billing")
-    assert not matcher.matches("admin.example.com", "/api/v1/users")
-
-
-def test_request_body_is_truncated_to_configured_limit():
-    mod = _load_addon_module()
+def _make_addon(mod):
     addon = mod.RekonStrikeCaptureAddon()
     addon.started = True
+    addon.ready = True
     addon.db = object()
-    addon.max_body_bytes = 4
     addon.program_id = 1
     addon.user_id = 1
-    addon.ready = True
-    addon.matcher = mod.ScopeMatcher.from_scope_lists(["example.com/*"], [])
+    addon.max_body_bytes = 10 * 1024 * 1024
+    addon.matcher = mod.ScopeMatcher.from_scope_lists(
+        in_scope=["*.example.com/*", "example.com/api/*"],
+        out_of_scope=["malicious.com/*"],
+    )
+    return addon
 
+
+def _flow(url: str, method: str, headers: dict[str, str], body: bytes):
     class Headers(dict):
         def items(self):
             return super().items()
 
     req = SimpleNamespace(
-        pretty_url="https://example.com/api?q=1",
-        method="POST",
-        headers=Headers({"Content-Type": "application/json", "Authorization": "Bearer x"}),
-        raw_content=b"abcdefgh",
+        pretty_url=url,
+        method=method,
+        headers=Headers(headers),
+        raw_content=body,
     )
-    flow = SimpleNamespace(request=req)
-    addon.request(flow)
-    payload = addon.queue.get_nowait()
-    assert payload["body"] == b"abcd"
-    assert payload["body_size"] == 8
-    assert payload["query_string"] == "q=1"
+    return SimpleNamespace(request=req)
 
 
-def test_json_body_sensitive_fields_are_redacted():
+def test_request_pipeline_scope_and_scrubbing():
     mod = _load_addon_module()
-    raw = b'{"password":"p","api_key":"k","nested":{"token":"t","ok":"v"}}'
-    out = mod.scrub_body_json(raw)
-    assert out is not None
-    text = out.decode("utf-8")
-    assert '"password":"[REDACTED]"' in text
-    assert '"api_key":"[REDACTED]"' in text
-    assert '"token":"[REDACTED]"' in text
-    assert '"ok":"v"' in text
+    addon = _make_addon(mod)
+
+    # 1) in-scope GET should capture
+    addon.request(_flow(
+        url="https://example.com/api/users",
+        method="GET",
+        headers={"User-Agent": "pytest"},
+        body=b"",
+    ))
+
+    # 2) out-of-scope POST should skip
+    addon.request(_flow(
+        url="https://malicious.com/steal",
+        method="POST",
+        headers={"Content-Type": "application/json"},
+        body=b'{"x":"y"}',
+    ))
+
+    # 3) in-scope POST with sensitive header/body should scrub
+    addon.request(_flow(
+        url="https://api.example.com/api/login",
+        method="POST",
+        headers={"Authorization": "Bearer secret", "Content-Type": "application/json"},
+        body=b'{"password":"secret","ok":"yes"}',
+    ))
+
+    assert addon.captured_count == 2
+    assert addon.filtered_count == 1
+
+    first = addon.queue.get_nowait()
+    second = addon.queue.get_nowait()
+
+    assert first["url"] == "https://example.com/api/users"
+    assert first["method"] == "GET"
+    assert first["scope_matched"] is True
+
+    assert second["url"] == "https://api.example.com/api/login"
+    assert "Authorization" not in second["headers"]
+    body = json.loads(second["body"].decode("utf-8"))
+    assert body["password"] == "[REDACTED]"
+    assert body["ok"] == "yes"
 
 
-def test_metrics_snapshot_contains_expected_counters():
+def test_queue_non_blocking_under_load():
     mod = _load_addon_module()
-    addon = mod.RekonStrikeCaptureAddon()
-    metrics = addon.metrics_snapshot()
-    assert "captured_count" in metrics
-    assert "filtered_count" in metrics
-    assert "write_errors" in metrics
-    assert "scope_cache_hits" in metrics
-    assert "scope_cache_misses" in metrics
-    assert "dropped_count" in metrics
+    addon = _make_addon(mod)
+
+    start = time.monotonic()
+    for i in range(100):
+        addon.request(_flow(
+            url=f"https://app.example.com/api/{i}",
+            method="GET",
+            headers={"User-Agent": "pytest"},
+            body=b"",
+        ))
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 1.0
+    assert addon.dropped_count == 0
+    assert addon.captured_count == 100
+    assert addon.queue.qsize() == 100

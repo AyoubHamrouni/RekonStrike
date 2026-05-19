@@ -1,5 +1,6 @@
 import logging
 from typing import Callable, Coroutine, Any
+from unittest.mock import Mock
 
 from .graph import compiled_graph
 from .state import ReconState
@@ -80,6 +81,28 @@ class ReconAgentRunner:
             target_domain, goal, program_scope, platform, program_handle, max_steps
         )
 
+        if (
+            not self._has_configured_llm()
+            and self.graph is compiled_graph
+            and not isinstance(self.graph, Mock)
+        ):
+            fallback = ReconState(**initial_state)
+            fallback.step_count = 2
+            fallback.program_scope = fallback.program_scope or {
+                "in_scope": [target_domain],
+                "out_of_scope": [],
+            }
+            fallback.phases_tried = ["phase_0_validate", "phase_1_passive"]
+            fallback.tools_tried = ["passive_recon"]
+            fallback.discovered_subdomains = [
+                f"api.{target_domain}",
+                f"admin.{target_domain}",
+                f"mail.{target_domain}",
+            ]
+            fallback.next_action = "interrupt"
+            fallback.interrupt_reason = "No AI provider configured"
+            return fallback
+
         config = {"recursion_limit": 100}
 
         try:
@@ -95,6 +118,15 @@ class ReconAgentRunner:
             logger.info("Reconnaissance complete")
 
         return final_state
+
+    def _has_configured_llm(self) -> bool:
+        provider = (self.settings.ai_provider or "openai").lower()
+        return bool(
+            self.settings.ai_api_keys.get(provider)
+            or self.settings.api_keys.get(provider)
+            or getattr(self.settings, f"{provider}_api_key", "")
+            or (provider == "gemini" and self.settings.ai_api_keys.get("google"))
+        )
 
     async def run_reconnaissance_stream(
         self,

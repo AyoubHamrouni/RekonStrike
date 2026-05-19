@@ -7,6 +7,7 @@ from sqlalchemy import text
 from rekonstrike.config import load_settings
 from rekonstrike.database import get_database
 from rekonstrike.tasks import get_task_manager
+from rekonstrike.phases import get_registered_phases
 from rekonstrike.api.routers.agent import router as agent_router
 from rekonstrike.api.routers.scans import router as scans_router
 from rekonstrike.api.routers.targets import router as targets_router
@@ -46,7 +47,7 @@ app.state.task_manager = task_manager
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -65,6 +66,10 @@ async def get_config():
         "ai_provider": settings.ai_provider,
         "default_ai_model": settings.default_ai_model
     }
+
+@app.get("/phases")
+async def phases():
+    return get_registered_phases()
 
 # Routers
 app.include_router(agent_router, prefix="/api/v1")

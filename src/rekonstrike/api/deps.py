@@ -21,7 +21,9 @@ async def verify_auth(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ):
     if not settings.server_api_key:
-        return True
+        if settings.allow_insecure_dev_auth:
+            return True
+        raise HTTPException(status_code=503, detail="API auth is not configured")
     if credentials is None or credentials.credentials != settings.server_api_key:
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
     return True

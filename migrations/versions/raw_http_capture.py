@@ -1,4 +1,4 @@
-"""add_raw_http_captures
+"""raw_http_capture
 
 Revision ID: c9f31d3b2a10
 Revises: a1b2c3d4e5f6
@@ -47,6 +47,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["program_id"], ["programs.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("program_id", "user_id", "timestamp", name="uq_raw_http_program_user_ts"),
     )
     op.create_index(
         "ix_raw_http_program_timestamp",
