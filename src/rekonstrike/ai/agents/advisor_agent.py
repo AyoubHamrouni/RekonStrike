@@ -1,5 +1,4 @@
 from typing import Any, Dict, List
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
 

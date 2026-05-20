@@ -15,7 +15,7 @@ from ..schemas.threat_model_output import (
     compute_risk_summary,
     empty_assessment,
 )
-from ..prompts.threat_model import get_prompt, get_prompt_with_context
+from ..prompts.threat_model import get_prompt_with_context
 
 logger = logging.getLogger(__name__)
 

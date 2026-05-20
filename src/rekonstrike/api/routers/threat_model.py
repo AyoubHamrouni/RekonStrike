@@ -2,18 +2,14 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..deps import verify_auth, get_target_repo, get_host_repo, get_db_session, settings
+from ..deps import verify_auth, get_target_repo, get_db_session, settings
 from ...repositories.target_repo import TargetRepository
-from ...repositories.host_repo import HostRepository
 from ...database import AIInsight
-from ...ai.schemas.threat_model_input import SurfaceCaptureInput, build_llm_input, Anomaly
-from ...ai.schemas.threat_model_output import ThreatAssessment, empty_assessment
+from ...ai.schemas.threat_model_input import build_llm_input, Anomaly
+from ...ai.schemas.threat_model_output import empty_assessment
 from ...ai.agents.threat_model_agent import run_threat_model
-from ...config import load_settings
-from ...database import get_database as get_db
 import hashlib
 import json
-import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +126,7 @@ async def _fetch_raw_captures(
     program_id: int | None,
     limit: int = 500,
 ) -> list[dict]:
-    from sqlalchemy import select, text
+    from sqlalchemy import text
 
     if program_id:
         stmt = text("""
