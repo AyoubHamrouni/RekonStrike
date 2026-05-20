@@ -23,14 +23,14 @@ router = APIRouter(prefix="/targets/{target_id}/threat-model", tags=["threat_mod
 @router.post("/analyze")
 async def analyze_threat_model(
     target_id: int,
-    tier: str = Query("haiku", description="Analysis tier: 'haiku' (fast, ~3-5s) or 'opus' (deep, ~20-40s)"),
+    tier: str = Query("fast", description="Analysis tier: 'fast' (cheap, ~3-5s) or 'deep' (thorough, ~20-40s)"),
     program_id: int | None = Query(None, description="Optional program ID for scope filtering"),
     auth: bool = Depends(verify_auth),
     repo: TargetRepository = Depends(get_target_repo),
     session: AsyncSession = Depends(get_db_session),
 ):
-    if tier not in ("haiku", "opus"):
-        raise HTTPException(status_code=400, detail="tier must be 'haiku' or 'opus'")
+    if tier not in ("fast", "deep"):
+        raise HTTPException(status_code=400, detail="tier must be 'fast' or 'deep'")
 
     target = await repo.get(target_id)
     if not target:
@@ -39,8 +39,8 @@ async def analyze_threat_model(
     raw_captures = await _fetch_raw_captures(session, target_id, program_id, limit=500)
     anomalies = await _fetch_anomalies(session, target_id)
 
-    max_families = 10 if tier == "opus" else 20
-    max_eps = 5 if tier == "opus" else 15
+    max_families = 10 if tier == "deep" else 20
+    max_eps = 5 if tier == "deep" else 15
     surface = build_llm_input(
         raw_captures=raw_captures,
         anomalies=anomalies,

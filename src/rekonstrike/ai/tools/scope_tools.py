@@ -1,57 +1,87 @@
+import fnmatch
 import logging
 from typing import List, Dict, Any
 
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
-
-from ..factory import get_llm
-
 logger = logging.getLogger(__name__)
 
+
+def _match_scope(asset: str, patterns: List[str]) -> bool:
+    """Check if an asset matches any of the given glob/wildcard patterns."""
+    for pattern in patterns:
+        pattern = pattern.strip().lower()
+        if not pattern:
+            continue
+        if fnmatch.fnmatch(asset.lower(), pattern):
+            return True
+        # Also try matching against just the hostname portion
+        if "://" in asset:
+            host = asset.split("://", 1)[1].split("/")[0]
+            if fnmatch.fnmatch(host.lower(), pattern):
+                return True
+    return False
+
+
+_HIGH_VALUE_KEYWORDS = [
+    "dev", "stg", "stage", "uat", "test", "beta",
+    "admin", "corp", "int", "portal", "vpn",
+    "api", "graphql", "swagger",
+    "v1", "old", "legacy",
+]
+
+
+def _is_high_value(asset: str) -> bool:
+    """Determine if an asset looks particularly interesting."""
+    lower = asset.lower()
+    for kw in _HIGH_VALUE_KEYWORDS:
+        if kw in lower:
+            return True
+    return False
+
+
 class ScopeAdvisor:
-    """Tool for analyzing discovered assets against program scope definitions."""
+    """Deterministic scope analyzer — compares discovered assets against scope definitions."""
 
-    def __init__(self, settings: Any):
-        self.settings = settings
-        self.llm = get_llm(settings, temperature=0.0)
-        
-        self.scope_prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a scope analyst for a bug bounty program.
-Your task is to compare discovered assets against the program's official in-scope and out-of-scope definitions.
+    def analyze_scope(self, in_scope: List[str], out_of_scope: List[str], discovered: List[str]) -> Dict[str, Any]:
+        """Analyzes assets against scope rules using pattern matching."""
+        results = {
+            "in_scope_confirmed": [],
+            "out_of_scope_flagged": [],
+            "unclear": [],
+            "high_value": [],
+        }
 
-Program Scope:
-In-Scope: {in_scope}
-Out-of-Scope: {out_of_scope}
+        for asset in discovered:
+            asset = asset.strip()
+            if not asset:
+                continue
 
-Discovered Assets:
-{discovered}
+            if _match_scope(asset, out_of_scope):
+                results["out_of_scope_flagged"].append(asset)
+            elif _match_scope(asset, in_scope):
+                results["in_scope_confirmed"].append(asset)
+                if _is_high_value(asset):
+                    results["high_value"].append(asset)
+            else:
+                results["unclear"].append(asset)
 
-Analyze each discovered asset and determine if it is:
-1. "in_scope_confirmed": Explicitly matches in-scope rules.
-2. "out_of_scope_flagged": Explicitly matches out-of-scope rules or wildcards.
-3. "unclear": Ambiguous or requires manual review.
-4. "high_value": In-scope assets that look particularly interesting (e.g., UAT, Staging, Admin).
+        return results
 
-Return a JSON object with these keys."""),
-            ("user", "Analyze the discovered assets now.")
-        ])
-        
-        self.parser = JsonOutputParser()
-        self.chain = self.scope_prompt | self.llm | self.parser
 
-    async def analyze_scope(self, in_scope: List[str], out_of_scope: List[str], discovered: List[str]) -> Dict[str, Any]:
-        """Analyzes assets against scope rules."""
-        try:
-            result = await self.chain.ainvoke({
-                "in_scope": ", ".join(in_scope),
-                "out_of_scope": ", ".join(out_of_scope),
-                "discovered": "\n".join(discovered)
-            })
-            return result
-        except Exception as e:
-            logger.error(f"Failed to analyze scope: {e}")
-            return {"error": str(e)}
-
-async def run_scope_advisor(settings: Any, in_scope: List[str], out_of_scope: List[str], discovered: List[str]) -> Dict[str, Any]:
-    advisor = ScopeAdvisor(settings)
-    return await advisor.analyze_scope(in_scope, out_of_scope, discovered)
+async def run_scope_advisor(*args, **kwargs) -> Dict[str, Any]:
+    """Entry point — fully deterministic, no LLM call.
+    
+    Accepts (in_scope, out_of_scope, discovered) or (settings, in_scope, out_of_scope, discovered)
+    for backward compatibility with existing callers.
+    """
+    if len(args) == 3:
+        in_scope, out_of_scope, discovered = args
+    elif len(args) == 4:
+        _, in_scope, out_of_scope, discovered = args
+    elif "discovered" in kwargs:
+        in_scope = kwargs.get("in_scope", [])
+        out_of_scope = kwargs.get("out_of_scope", [])
+        discovered = kwargs["discovered"]
+    else:
+        raise TypeError("run_scope_advisor requires in_scope, out_of_scope, and discovered")
+    advisor = ScopeAdvisor()
+    return advisor.analyze_scope(in_scope, out_of_scope, discovered)

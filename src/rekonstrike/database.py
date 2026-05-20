@@ -314,6 +314,79 @@ class TakeoverFinding(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
 
+class TestingSession(Base):
+    __tablename__ = "testing_sessions"
+    __table_args__ = (
+        Index("ix_testing_session_target_user", "target_id", "user_id"),
+        Index("ix_testing_session_status", "status"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    target_id: Mapped[int] = mapped_column(
+        ForeignKey("scope_targets.id", ondelete="CASCADE")
+    )
+    user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    threat_model_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("ai_insights.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    findings_tested: Mapped[int] = mapped_column(Integer, default=0)
+    findings_confirmed: Mapped[int] = mapped_column(Integer, default=0)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+class TestResult(Base):
+    __tablename__ = "test_results"
+    __table_args__ = (
+        Index("ix_test_result_session_confirmed", "testing_session_id", "confirmed"),
+        Index("ix_test_result_finding", "finding_id"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    testing_session_id: Mapped[int] = mapped_column(
+        ForeignKey("testing_sessions.id", ondelete="CASCADE")
+    )
+    finding_id: Mapped[int] = mapped_column(Integer)
+    endpoint: Mapped[str] = mapped_column(String(1024))
+    payload: Mapped[str] = mapped_column(Text, default="")
+    response_status: Mapped[int] = mapped_column(Integer, default=0)
+    response_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    tested_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+class BrowserCapture(Base):
+    __tablename__ = "browser_captures"
+    __table_args__ = (
+        Index("ix_browser_capture_target_session", "target_id", "scan_session_id"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    target_id: Mapped[int] = mapped_column(
+        ForeignKey("scope_targets.id", ondelete="CASCADE")
+    )
+    scan_session_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("scan_sessions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    url: Mapped[str] = mapped_column(String(1024))
+    rendered_html: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    network_logs: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    cookies_set: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    local_storage: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    session_storage: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    javascript_errors: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    execution_time_ms: Mapped[int] = mapped_column(Integer, default=0)
+    screenshot_base64: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    js_bundles: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    source_maps: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    captured_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
 class Database:
     def __init__(self, url: str):
         self.engine = create_async_engine(url)

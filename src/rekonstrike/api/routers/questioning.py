@@ -1,14 +1,18 @@
 import logging
 import json
+import hashlib
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from langchain_core.output_parsers import JsonOutputParser
 
 from ..deps import verify_auth, get_target_repo, get_db_session, settings
 from ...repositories.target_repo import TargetRepository
 from ...database import AIInsight
 from ...ai.factory import get_llm
-from ...ai.schemas.threat_model_input import build_llm_input, SurfaceCaptureInput
+from ...ai.schemas.threat_model_input import build_llm_input
+from ...ai.prompts.questioning import prompt
 
 logger = logging.getLogger(__name__)
 
@@ -23,29 +27,6 @@ class QAItem(BaseModel):
 class QuestioningSession(BaseModel):
     questions: list[str]
     answers: list[QAItem] = []
-
-
-GENERATION_PROMPT = """You are a security analyst reviewing a captured web application surface. Your task is to identify genuine knowledge gaps that a human tester can fill.
-
-Review the following surface data and generate 3-5 specific, targeted questions. Each question must:
-1. Be grounded in something actually observed in the surface data
-2. Identify a gap that cannot be determined from traffic alone
-3. Be answerable conversationally by a human who knows the application
-
-BAD examples (generic, not grounded):
-- "What authentication mechanism does the app use?"
-- "Are there any other roles?"
-
-GOOD examples (specific, grounded):
-- "We saw JWT tokens in Authorization headers but also a separate cookie-based session for the admin path — do these share the same validation logic?"
-- "The /api/users endpoint returns different fields for admin vs regular user responses. Is this intended behavior or a bug?"
-- "We observed the /api/auth/upgrade endpoint changing JWT role claims. Should this endpoint be accessible to regular users?"
-
-Return ONLY a JSON object with a "questions" array of strings. No other text, no markdown.
-
-Surface data:
-{surface_json}
-"""
 
 
 @router.post("/generate")
@@ -70,11 +51,8 @@ async def generate_questions(
     if not surface.request_count and not surface.resource_families:
         return {"questions": []}
 
-    llm = get_llm(settings, temperature=0.3, model="claude-3-haiku-20240307")
-    chain = __import__("langchain_core.prompts", fromlist=["ChatPromptTemplate"]).ChatPromptTemplate.from_messages([
-        ("system", GENERATION_PROMPT),
-        ("user", "{surface_json}"),
-    ]) | llm | __import__("langchain_core.output_parsers", fromlist=["JsonOutputParser"]).JsonOutputParser()
+    llm = get_llm(settings, temperature=0.3, tier="fast")
+    chain = prompt | llm | JsonOutputParser()
 
     try:
         result = await chain.ainvoke({"surface_json": surface.model_dump_json(indent=2)})
@@ -105,7 +83,7 @@ async def submit_answers(
     insight = AIInsight(
         target_id=target_id,
         insight_type="questioning_answers",
-        input_hash=__import__("hashlib").sha256(str(qa_pairs).encode()).hexdigest(),
+        input_hash=hashlib.sha256(str(qa_pairs).encode()).hexdigest(),
         model_used="user_submitted",
         result={"answers": qa_pairs, "questions": questions},
     )
@@ -135,7 +113,6 @@ async def get_questioning_session(
 
 
 async def _get_existing_questions(session: AsyncSession, target_id: int) -> dict | None:
-    from sqlalchemy import select
     stmt = select(AIInsight).where(
         AIInsight.target_id == target_id,
         AIInsight.insight_type == "questioning_questions",
@@ -148,7 +125,6 @@ async def _get_existing_questions(session: AsyncSession, target_id: int) -> dict
 
 
 async def _get_latest_answers(session: AsyncSession, target_id: int) -> dict | None:
-    from sqlalchemy import select
     stmt = select(AIInsight).where(
         AIInsight.target_id == target_id,
         AIInsight.insight_type == "questioning_answers",
@@ -165,7 +141,7 @@ async def _store_questions(session: AsyncSession, target_id: int, questions: lis
         target_id=target_id,
         insight_type="questioning_questions",
         input_hash="generated",
-        model_used="haiku",
+        model_used="fast",
         result={"questions": questions},
     )
     session.add(insight)
@@ -178,8 +154,6 @@ async def _fetch_raw_captures(
     program_id: int | None,
     limit: int = 200,
 ) -> list[dict]:
-    from sqlalchemy import text
-
     if program_id:
         stmt = text("""
             SELECT method, url, hostname, path, query_string, headers, body_size, timestamp

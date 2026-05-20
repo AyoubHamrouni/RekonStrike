@@ -16,10 +16,26 @@ class NoopLLM:
         return Response()
 
 
-def get_llm(settings: Any, temperature: float = 0.0, **kwargs) -> Any:
+def get_llm(settings: Any, temperature: float = 0.0, tier: str = "", **kwargs) -> Any:
     """
     Factory function to instantiate the correct LangChain model based on settings.
+
+    Args:
+        settings: application settings (config.Settings)
+        temperature: LLM temperature
+        tier: "fast" | "deep" — selects ai_fast_model or ai_deep_model from settings.
+              Falls back to default_ai_model if unset or if the tier-specific field is blank.
+        **kwargs: passed through to the LangChain constructor, including model overrides.
     """
+    # Resolve model from tier if not explicitly passed in kwargs
+    if "model" not in kwargs:
+        if tier == "fast" and settings.ai_fast_model:
+            kwargs["model"] = settings.ai_fast_model
+        elif tier == "deep" and settings.ai_deep_model:
+            kwargs["model"] = settings.ai_deep_model
+        else:
+            kwargs["model"] = settings.default_ai_model
+
     provider = (settings.ai_provider or "openai").lower()
     key = (
         settings.ai_api_keys.get(provider)

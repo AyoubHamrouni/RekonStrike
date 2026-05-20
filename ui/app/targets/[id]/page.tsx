@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Target, Globe, Server, Shield, Activity, Link2 } from "lucide-react";
+import { ArrowLeft, Target, Globe, Server, Shield, Activity, Link2, Bug } from "lucide-react";
 import { Card, Badge } from "@/components/ui/Shared";
 import { Tabs } from "@/components/ui/Tabs";
 import { Button } from "@/components/ui/Button";
@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { fetchTarget, fetchStats, fetchSubdomains, fetchLiveHosts, fetchVulnerabilities, fetchEndpoints } from "@/lib/api";
 import type { Target as TargetType, Stats, Subdomain, LiveHost, Vulnerability, Endpoint } from "@/types";
 
-type TabId = "overview" | "subdomains" | "hosts" | "vulnerabilities" | "endpoints";
+type TabId = "overview" | "subdomains" | "hosts" | "vulnerabilities" | "endpoints" | "testing";
 
 export default function TargetDetailPage() {
   const params = useParams();
@@ -64,6 +64,7 @@ export default function TargetDetailPage() {
     { id: "hosts" as TabId, label: "Live Hosts", count: stats?.live_hosts },
     { id: "vulnerabilities" as TabId, label: "Vulnerabilities", count: vulnCount },
     { id: "endpoints" as TabId, label: "Endpoints", count: stats?.endpoints },
+    { id: "testing" as TabId, label: "Testing", icon: <Bug size={14} /> },
   ];
 
   return (
@@ -136,6 +137,7 @@ export default function TargetDetailPage() {
       {activeTab === "hosts" && <LiveHostsTab targetId={targetId} />}
       {activeTab === "vulnerabilities" && <VulnerabilitiesTab targetId={targetId} />}
       {activeTab === "endpoints" && <EndpointsTab targetId={targetId} />}
+      {activeTab === "testing" && <TestingTab targetId={targetId} />}
     </div>
   );
 }
@@ -387,5 +389,26 @@ function EndpointsTab({ targetId }: { targetId: number }) {
         </div>
       ))}
     </div>
+  );
+}
+
+function TestingTab({ targetId }: { targetId: number }) {
+  return (
+    <Card>
+      <div className="text-center py-8">
+        <Bug size={32} className="mx-auto mb-3 text-purple-500" />
+        <h3 className="text-lg font-bold text-slate-200 mb-2">
+          Testing Workspace
+        </h3>
+        <p className="text-sm text-slate-500 mb-4">
+          Work through threat model findings, submit test results, and track confirmed vulnerabilities.
+        </p>
+        <Link href={`/targets/${targetId}/testing`}>
+          <Button variant="primary" size="md" icon={<Bug size={14} />}>
+            Open Testing Workspace
+          </Button>
+        </Link>
+      </div>
+    </Card>
   );
 }

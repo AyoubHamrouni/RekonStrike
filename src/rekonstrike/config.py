@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     # Defaults for Agent logic
     ai_provider: str = "openai"
     default_ai_model: str = "gpt-4o-mini"
+    ai_fast_model: str = ""  # optional override for cheap/fast tasks
+    ai_deep_model: str = ""  # optional override for expensive/deep tasks
 
     # Redis (optional — falls back to direct execution if unavailable)
     redis_url: str = ""
@@ -128,6 +130,10 @@ def load_settings() -> Settings:
         settings.ai_provider = os.environ.get("AI_PROVIDER")
     if os.environ.get("DEFAULT_AI_MODEL"):
         settings.default_ai_model = os.environ.get("DEFAULT_AI_MODEL")
+    if os.environ.get("AI_FAST_MODEL"):
+        settings.ai_fast_model = os.environ.get("AI_FAST_MODEL")
+    if os.environ.get("AI_DEEP_MODEL"):
+        settings.ai_deep_model = os.environ.get("AI_DEEP_MODEL")
     if os.environ.get("ANTHROPIC_API_KEY"):
         settings.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
     if os.environ.get("OPENAI_API_KEY"):

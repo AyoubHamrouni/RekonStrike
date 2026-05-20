@@ -49,7 +49,7 @@ class Phase:
             return
 
         result = await analyze_surface(self.ctx.settings, subdomains, live_hosts)
-        anomalies = result.get("anomalous_targets", [])
+        anomalies = result.get("prioritized_targets", []) or result.get("anomalous_targets", [])
         
         if anomalies:
             out.table(

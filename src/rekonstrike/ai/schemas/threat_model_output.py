@@ -32,7 +32,7 @@ class PrivilegeEscalationChain(BaseModel):
 class ThreatAssessment(BaseModel):
     target: str = ""
     analyzed_at: str = ""
-    model_used: str = "haiku"  # "haiku" | "opus"
+    model_used: str = "fast"  # "fast" | "deep"
     risk_summary: dict[str, int] = Field(default_factory=lambda: {
         "critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0,
     })

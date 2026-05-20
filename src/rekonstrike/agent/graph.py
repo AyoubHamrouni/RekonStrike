@@ -36,6 +36,8 @@ except ImportError:
 try:
     from rekonstrike.ai.factory import get_llm
     from rekonstrike.config import load_settings
+    from rekonstrike.ai.prompts.strategist import SYSTEM_PROMPT as STRATEGIST_PROMPT
+    from rekonstrike.ai.prompts.triager import SYSTEM_PROMPT as TRIAGER_PROMPT
 except ImportError:
     def get_llm(settings, **kwargs):
         class MockLLM:
@@ -52,6 +54,8 @@ except ImportError:
             ai_base_urls = {}
             api_keys = {}
         return MockSettings()
+    STRATEGIST_PROMPT = ""
+    TRIAGER_PROMPT = ""
 
 logger = logging.getLogger(__name__)
 
@@ -87,15 +91,6 @@ def _validated_next_action(action: str, fallback: str = "interrupt") -> str:
     return action if action in allowed else fallback
 
 
-def _phases_prompt_block(tried: list[str] | None = None) -> str:
-    lines = ["Available phases:"]
-    for p in list_phases():
-        deps = f" (after {', '.join(p['dependencies'])})" if p["dependencies"] else ""
-        status = " [DONE]" if tried and p["name"] in tried else ""
-        lines.append(f"  - {p['name']}: {p['description']}{deps}{status}")
-    return "\n".join(lines)
-
-
 # ── Nodes ──────────────────────────────────────────────────────────────────
 
 
@@ -114,47 +109,15 @@ async def strategy_node(state: ReconState) -> dict:
 
     settings = load_settings()
 
-    prompt = f"""You are a senior bug bounty strategist. Your job is to analyze this program and set the reconnaissance strategy.
+    prompt = STRATEGIST_PROMPT.format(
+        target_domain=state.target_domain,
+        goal=state.goal,
+        platform_context=_safe_json(state.platform_context) if state.platform_context else "No platform data available — operating with default scope.",
+        in_scope=state.program_scope.get("in_scope", []),
+        out_of_scope=state.program_scope.get("out_of_scope", []),
+        phases_tried=state.phases_tried or "none yet",
+    )
 
-Target domain: {state.target_domain}
-Goal: {state.goal}
-
-Platform context:
-{_safe_json(state.platform_context) if state.platform_context else '  No platform data available - operating with default scope.'}
-
-In-scope assets: {state.program_scope.get('in_scope', [])}
-Out-of-scope: {state.program_scope.get('out_of_scope', [])}
-
-Phase history: {state.phases_tried or 'none yet'}
-
-{_phases_prompt_block(state.phases_tried)}
-
-Your job:
-1. Set a strategy based on program context (bounty range, scope freshness, competition, etc.)
-2. Prioritize targets — fresh scope items are highest ROI
-3. Decide which phase to run first
-4. Explain your thinking to the user (guidance)
-
-If the program has NO in-scope assets or the target is invalid, return {{"next_action": "stop"}}.
-
-Respond ONLY with valid JSON:
-{{
-  "strategy": {{
-    "focus_areas": ["api", "subdomain_takeover"],
-    "depth_vs_breadth": "breadth" | "depth",
-    "risk_tolerance": "conservative" | "aggressive",
-    "priority_targets": ["target1.com"],
-    "phases_to_skip": [],
-    "reasoning": "why this strategy fits this program"
-  }},
-  "guidance": [
-    "I'll start by ... because ...",
-    "This program has ... so I will focus on ..."
-  ],
-  "next_action": "phase_1_passive" | "interrupt" | "stop",
-  "reasoning": "concise technical reasoning"
-}}
-"""
     try:
         llm = get_llm(settings, temperature=0.0)
         response = await llm.ainvoke([SystemMessage(content=prompt)])
@@ -217,52 +180,18 @@ async def triage_node(state: ReconState) -> dict:
     last_phase = state.phases_tried[-1] if state.phases_tried else None
     last_result = state.phase_results.get(last_phase, {}) if last_phase else {}
 
-    prompt = f"""You are a senior bug bounty hunter reviewing reconnaissance results. Interpret findings, guide the user, and decide what to do next.
+    prompt = TRIAGER_PROMPT.format(
+        target_domain=state.target_domain,
+        goal=state.goal,
+        last_phase=last_phase or "none",
+        phase_result=_safe_json(last_result) if last_result else "No results yet.",
+        subdomain_count=len(state.discovered_subdomains),
+        host_count=len(state.live_hosts),
+        finding_count=len(state.findings),
+        phases_tried=state.phases_tried or "none",
+        strategy_json=_safe_json(state.strategy) if state.strategy else "Not set.",
+    )
 
-Current state:
-- Target: {state.target_domain}
-- Goal: {state.goal}
-
-Last phase completed: {last_phase or 'none'}
-Phase result summary:
-{_safe_json(last_result) if last_result else '  No results yet.'}
-
-Overall progress:
-- Subdomains discovered: {len(state.discovered_subdomains)}
-- Live hosts found: {len(state.live_hosts)}
-- Findings: {len(state.findings)}
-- Phases executed: {state.phases_tried or 'none'}
-
-Strategy:
-{_safe_json(state.strategy) if state.strategy else '  Not set.'}
-
-{_phases_prompt_block(state.phases_tried)}
-
-Special actions:
-  - re_strategize: re-analyze the program and set a new strategy (major pivot)
-  - interrupt: pause for user input
-  - stop: finalize when done
-
-Your job:
-1. If the phase failed, explain why and suggest alternatives
-2. If the phase succeeded, highlight interesting findings through a bug bounty lens
-3. Produce human-readable guidance the user can learn from
-4. Decide the next action — continue to next phase, re-strategize, or stop
-
-Respond ONLY with valid JSON:
-{{
-  "analysis": {{
-    "interesting_findings": ["finding 1", "finding 2"],
-    "key_insight": "one-line summary of what matters most"
-  }},
-  "guidance": [
-    "I found ... which is interesting because ...",
-    "Next I'll run ... to look for ..."
-  ],
-  "next_action": "phase_name" | "re_strategize" | "interrupt" | "stop",
-  "reasoning": "concise technical reasoning"
-}}
-"""
     try:
         llm = get_llm(settings, temperature=0.0)
         response = await llm.ainvoke([SystemMessage(content=prompt)])
@@ -326,7 +255,6 @@ def route_from_strategy(state: ReconState) -> str:
 
 
 def route_from_executor(state: ReconState) -> str:
-    # Always go to triage — even on failure, the LLM explains what happened
     return "triage"
 
 

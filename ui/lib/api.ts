@@ -306,6 +306,54 @@ export async function sendAgentFeedback(
   });
 }
 
+export async function startTestingSession(
+  targetId: number,
+  threatModelId?: number
+): Promise<{ session_id: number; threat_model: unknown; findings: unknown[]; status: string }> {
+  return req(`/targets/${targetId}/testing/session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ threat_model_id: threatModelId }),
+  });
+}
+
+export async function getTestingSession(
+  targetId: number,
+  page = 0,
+  size = 50
+): Promise<import("@/types").TestingSession> {
+  return req(`/targets/${targetId}/testing/session?page=${page}&size=${size}`);
+}
+
+export async function submitTestResult(
+  targetId: number,
+  body: import("@/types").TestResultSubmit
+): Promise<import("@/types").TestResultResponse> {
+  return req(`/targets/${targetId}/testing/result`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export async function updateTestingSession(
+  targetId: number,
+  status: "paused" | "completed"
+): Promise<{ session_id: number; status: string }> {
+  return req(`/targets/${targetId}/testing/session`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+}
+
+export async function getTestingAdvice(
+  targetId: number,
+  findingId: number
+): Promise<import("@/types").AdviceResponse> {
+  return req(`/targets/${targetId}/testing/advice/${findingId}`);
+}
+
 export function connectAgentSSE(
   targetId: number,
   sessionId: string,

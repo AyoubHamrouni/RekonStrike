@@ -6,8 +6,8 @@ from langgraph.prebuilt import ToolNode
 
 from ..state import TriageState
 from ..tools import fetch_http_snippet
-
 from ..factory import get_llm
+from ..prompts.triage import SYSTEM_PROMPT as TRIAGE_SYSTEM_PROMPT
 
 
 
@@ -19,38 +19,14 @@ def _build_triage_graph(settings: Any):
     async def evaluate_finding(state: TriageState):
         finding = state["finding"]
 
-        system_prompt = (
-            "You are an automated triage engine for an offensive security pipeline. "
-            "Evaluate the provided vulnerability finding against the target URL.\n\n"
-            "Follow these steps precisely:\n"
-            "1. Analyze the finding data. Is it a known generic signature (e.g., a default 404 page falsely flagged as an information disclosure)?\n"
-            "2. If necessary, use the `fetch_http_snippet` tool to pull the live DOM/Headers to verify the claim.\n"
-            "3. Formulate your reasoning step-by-step.\n\n"
-            "CONSTRAINTS:\n"
-            "- DO NOT assume a finding is valid just because the scanner flagged it. Be highly skeptical.\n"
-            "- DO NOT invent evidence. If you cannot confirm via tools, state that confidence is low.\n"
-            "- DO NOT wrap your output in markdown formatting (no ```json).\n\n"
-            "Output strictly in this JSON schema:\n"
-            "{\n"
-            '  "reasoning_steps": [\n'
-            '    "Step 1: Analyzed scanner output...",\n'
-            '    "Step 2: Confirmed..."\n'
-            '  ],\n'
-            '  "likely_false_positive": bool,\n'
-            '  "confidence": 0.0-1.0,\n'
-            '  "priority_rank": 1-5,\n'
-            '  "triage_note": "Concise technical justification."\n'
-            "}"
-        )
-
         if not state.get("messages"):
             user_prompt = f"Target URL: {state['target_url']}\nFinding Data:\n{json.dumps(finding, indent=2)}"
             messages = [
-                SystemMessage(content=system_prompt),
+                SystemMessage(content=TRIAGE_SYSTEM_PROMPT),
                 HumanMessage(content=user_prompt),
             ]
         else:
-            messages = [SystemMessage(content=system_prompt)] + list(state["messages"])
+            messages = [SystemMessage(content=TRIAGE_SYSTEM_PROMPT)] + list(state["messages"])
 
         response = await llm_with_tools.ainvoke(messages)
         return {"messages": [response]}
@@ -106,7 +82,6 @@ async def run_triage(settings: Any, finding: Dict[str, Any], target_url: str) ->
 
     verdict = final_state.get("final_verdict")
     if not verdict:
-        # Fallback
         verdict = {
             "reasoning_steps": ["Execution failed or yielded no verdict."],
             "priority_rank": 999,
@@ -115,5 +90,4 @@ async def run_triage(settings: Any, finding: Dict[str, Any], target_url: str) ->
             "triage_note": "Unknown Error",
         }
 
-    # Merge verdict into original finding
     return {**finding, **verdict}

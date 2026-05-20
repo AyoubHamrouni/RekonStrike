@@ -169,3 +169,63 @@ export interface ScanRequest {
   target_type: string;
   phases: number[];
 }
+
+export interface TestingSession {
+  session_id: number | null;
+  threat_model_id?: number | null;
+  findings_tested: number;
+  findings_confirmed: number;
+  findings: TestingFinding[];
+  total_findings?: number;
+  page?: number;
+  size?: number;
+  status: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface TestingFinding {
+  index: number;
+  finding_type: string;
+  risk_rank: string;
+  affected_endpoints: { method: string; path: string; parameters?: string[] }[];
+  exploitation_description: string;
+  exploitation_difficulty?: string;
+  data_at_risk?: string[];
+  confidence?: number;
+  recommended_test?: string;
+  exploitation_chain?: string[];
+  user_status?: string;
+  status: "untested" | "tested" | "confirmed" | "dismissed";
+}
+
+export interface TestResultSubmit {
+  finding_id: number;
+  endpoint: string;
+  payload: string;
+  response_status: number;
+  response_body?: string;
+  confirmed: boolean;
+  notes?: string;
+}
+
+export interface TestResultResponse {
+  result_id: number;
+  finding_id: number;
+  finding_status: string;
+  findings_tested: number;
+  findings_confirmed: number;
+}
+
+export interface AdviceResponse {
+  finding_id: number;
+  exploitation_steps: ExploitationStep[];
+  tools_recommended: string[];
+}
+
+export interface ExploitationStep {
+  step: number;
+  action: string;
+  tool?: string;
+  payload?: string;
+}
