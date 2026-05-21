@@ -1,42 +1,65 @@
-# RekonStrike v2 Architecture
+# RekonStrike Architecture
 
 ## Core Principles
-1. **PostgreSQL-only** — All data persists to PostgreSQL via asyncpg + SQLAlchemy async
-2. **Autonomous agent-driven** — LangGraph handles multi-tool coordination
-3. **Web UI primary** — All user interaction goes through Next.js + WebSocket, not CLI
-4. **Multi-model LLM** — Support Anthropic, OpenAI, Google Gemini via LangChain
+1. **PostgreSQL-only persistence** — All data persists via asyncpg + SQLAlchemy async
+2. **Deterministic by default** — Only use AI where a 10-line function cannot solve the problem
+3. **Provider-agnostic LLM** — Support OpenAI, Anthropic, Google Gemini, and OpenRouter via LangChain; model selected by capability tier (fast/deep), not hardcoded name
+4. **Human-in-the-loop** — The framework augments, never replaces, the security professional
 
 ## Technology Stack
-- **Backend:** FastAPI (async) + SQLAlchemy ORM (async) + PostgreSQL
-- **Agent:** LangGraph (StatieGraph) + LangChain (model abstraction)
-- **API:** RESTful routes + WebSocket for real-time agent communication
-- **Frontend:** Next.js + React + TypeScript + TailwindCSS
-- **Infrastructure:** Docker Compose (PostgreSQL + Redis + app)
+- **Backend:** Python 3.13+ / FastAPI (async) + SQLAlchemy ORM (async) + PostgreSQL
+- **Agent:** LangGraph (StateGraph) + LangChain (model abstraction)
+- **API:** RESTful routes + WebSocket for real-time scan events
+- **Frontend:** Next.js 14+ / React / TypeScript / TailwindCSS
+- **Browser:** Node.js 22 / Playwright / Express (separate service)
+- **Proxy:** mitmproxy addon (separate process)
+- **Filter:** Go-based traffic dedup/normalization CLI
+- **Infrastructure:** Docker Compose (PostgreSQL 17 + Redis 7 + 12+ tool containers)
 
-## Data Model
-- `ScopeTarget` — what we're hunting (example.com)
-- `Program` — linked bug bounty program (HackerOne, Bugcrowd, Intigriti)
-- `ProgramScope` — in-scope/out-of-scope rules from the program
-- `ScanSession` — an autonomous agent run
-- `Subdomain` — discovered subdomains
-- `LiveHost` — probed, responding web servers
-- `Vulnerability` — findings (from tools or manual testing)
-- `AIInsight` — agent reasoning output (triage, surface analysis, advice)
-- `FindingReport` — formatted bug report ready to submit
+## Data Model (20+ tables)
+
+| Model | Table | Purpose |
+|-------|-------|---------|
+| `User` | `users` | User accounts (single-user by default) |
+| `ScopeTarget` | `scope_targets` | Target domain/host being investigated |
+| `Program` | `programs` | Bug bounty program metadata |
+| `ProgramScope` | `program_scopes` | In-scope/out-of-scope rules |
+| `ScanSession` | `scan_sessions` | Autonomous agent run |
+| `Subdomain` | `subdomains` | Discovered subdomains |
+| `LiveHost` | `live_hosts` | Probed, responding web servers |
+| `Vulnerability` | `vulnerabilities` | Findings from tools or manual testing |
+| `AIInsight` | `ai_insights` | AI agent reasoning output |
+| `FindingReport` | `finding_reports` | Formatted bug reports |
+| `RawHTTPCapture` | `raw_http_captures` | Proxy-captured HTTP traffic |
+| `BrowserCapture` | `browser_captures` | Playwright capture results |
+| `TestingSession` | `testing_sessions` | Guided testing workspace sessions |
+| `TestResult` | `test_results` | Individual finding test results |
+| `AIVectorMemory` | `ai_vector_memory` | PGVector long-term memory |
+
+## Service Architecture
+
+```
+User browser (Next.js UI)
+    ↕ REST + WebSocket
+Python backend (FastAPI)
+    ↕ subprocess / Docker API
+Go tool containers (subfinder, httpx, nuclei, etc.)
+    ↕ HTTP API
+TypeScript browser-service (Playwright)
+    ↕ proxy-service/ (mitmproxy addon, separate process)
+PostgreSQL
+```
+
+The Python backend is the single orchestrator. No service calls another service except through Python. The browser-service does not call Go tools. The frontend does not call the browser-service directly.
 
 ## Workflow
-1. User links a bug bounty program (HackerOne/Bugcrowd/Intigriti)
-2. User clicks "Start Reconnaissance"
-3. LangGraph agent spins up with the program's scope rules
-4. Agent autonomously decides: passive recon → DNS resolution → HTTP probing → tool execution
-5. Agent discovers findings, surfaces anomalies, asks human for interrupt decisions
-6. Human reviews findings in the dashboard
-7. Human exports formatted bug report via one-click UI button
 
-## Next Build Steps
-- [] Complete database models (8 core models)
-- [ ] Spike 1: Tool layer (PassiveReconTool, HttpProbeTool, ...)
-- [ ] Spike 2: ReconState + StateGraph
-- [ ] Spike 3: Agent runner + end-to-end test
-- [ ] API routers (scan, targets, platforms, ai, ws)
-- [ ] Next.js UI for agent
+1. User creates a target or links a bug bounty program
+2. LangGraph agent runs: strategy → executor (deterministic phase) → triage → loop
+3. User reviews reconnaissance results (subdomains, live hosts, tech stack)
+4. User starts proxy capture or imports Burp/Caido data
+5. JS bundle analysis runs on captured endpoints
+6. AI-guided questioning identifies gaps in surface understanding
+7. Threat model analysis produces ranked findings with exploitation paths
+8. User works through findings in the guided testing workspace
+9. Confirmed vulnerabilities are drafted into platform-formatted reports

@@ -41,52 +41,58 @@ Be respectful, inclusive, and constructive. We're all here to learn and build so
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-pip install pytest ruff  # dev dependencies
+pip install ruff pytest pytest-asyncio pytest-mock
 
 # Frontend
-cd ui
-npm install
-npm run dev
+cd ui && npm install && npm run dev
+
+# Browser service
+cd browser-service && npm ci && npm run dev
 ```
 
 ## Project Structure
 
-RekonStrike follows a decoupled **Repository/Service Architecture**:
-
 ```
 rekonstrike/
-├── src/
-│   └── rekonstrike/      # Python package
-│       ├── api/          # Delivery Layer (FastAPI)
-│       │   ├── routers/  # Modular API routes
-│       │   ├── deps.py   # Dependency injection
-│       │   └── manager.py
-│       ├── services/     # Orchestration Layer
-│       ├── repositories/ # Persistence Layer
-│       ├── phases/       # Reconnaissance Phases
-│       ├── tools/        # Async tool wrappers
-│       ├── config.py     # Settings
-│       ├── database.py   # Models
-│       ├── engine.py     # Pipeline
-│       ├── schemas.py    # Pydantic models
-│       └── tasks.py      # Background tasks
+├── src/rekonstrike/      # Python package
+│   ├── api/              # FastAPI routers, deps, server, rate limiting
+│   ├── agent/            # LangGraph agent (state, graph, runner)
+│   ├── ai/               # LLM factory, prompts (11 files), agents, schemas
+│   ├── phases/           # Reconnaissance pipeline (8 phases)
+│   ├── integrations/     # Browser service client
+│   ├── platforms/        # HackerOne/Bugcrowd/Intigriti clients
+│   ├── repositories/     # Persistence layer (repository pattern)
+│   ├── services/         # Scan orchestration
+│   ├── tools/            # Go tool wrappers
+│   ├── database.py       # SQLAlchemy models (20+ tables)
+│   ├── config.py         # Pydantic-settings
+│   └── engine.py         # Pipeline orchestrator
+├── browser-service/      # Playwright headless capture (Express)
+├── proxy-service/        # mitmproxy addon (separate process)
+├── filter/               # Go-based traffic normalization CLI
 ├── ui/                   # Next.js frontend
-├── docker/               # Tool isolation containers
-├── tests/                # Automated test suite
-└── migrations/           # Alembic database migrations
+├── tests/                # Python test suite (148+ tests)
+└── docker/               # Tool isolation containers
 ```
 
 ## Code Style
 
 - **Python**: Follow PEP 8, use strict type hints, follow the Repository pattern for all DB access.
-- **JavaScript/React/Next.js**: Functional components, hooks, modern state management, and framework-aware routing.
-- **Components**: Maximum 300 lines per file to ensure maintainability.
+- **TypeScript/React/Next.js**: Functional components, hooks, modern state management.
 - **Testing**: New features should include unit tests for repositories and services.
 
 ## Testing
 
-- Backend: `python -m pytest tests/ -x -q`
-- Ensure all tests pass before submitting a Pull Request.
+```bash
+# Backend tests
+python -m pytest tests/ -x -q
+
+# Browser service tests
+cd browser-service && npx jest
+
+# Lint check
+ruff check src/rekonstrike/
+```
 
 ## License
 

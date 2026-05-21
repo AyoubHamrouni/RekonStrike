@@ -1,3 +1,5 @@
+from .scope_tools import run_scope_advisor, ScopeAdvisor, _match_scope, _is_high_value
+
 import aiohttp
 from typing import Annotated
 from langchain_core.tools import tool
@@ -55,3 +57,8 @@ async def fetch_http_snippet(
     except Exception as e:
         logger.debug(f"fetch_http_snippet failed for {url}: {e}")
         return f"Error: Could not fetch URL - {str(e)}"
+
+__all__ = [
+    "run_scope_advisor", "ScopeAdvisor", "_match_scope", "_is_high_value",
+    "_resolve_public_host", "fetch_http_snippet",
+]

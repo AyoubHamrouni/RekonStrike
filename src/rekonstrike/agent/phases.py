@@ -205,8 +205,8 @@ async def phase_4_content(state: ReconState, registry: ToolRegistry) -> dict:
             priority = state.strategy.get("priority_targets", [])
             capture_targets = [u for u in urls if any(p in u for p in priority)] if priority else urls[:3]
             if capture_targets:
-                from rekonstrike.tools.browser_client import BrowserCaptureClient
-                client = BrowserCaptureClient(
+                from rekonstrike.integrations.browser_client import BrowserClient
+                client = BrowserClient(
                     browser_url, token=getattr(settings, "browser_service_token", "")
                 )
                 browser_result = await client.capture_batch(capture_targets)

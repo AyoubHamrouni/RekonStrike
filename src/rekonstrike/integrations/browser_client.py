@@ -1,5 +1,6 @@
 """Async HTTP client for the browser-service (Playwright headless browser)."""
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Optional
 import aiohttp
@@ -76,6 +77,49 @@ class BrowserClient:
         session = await self._get_session()
         async with session.get("/health") as resp:
             return await resp.json()
+
+    async def capture_batch(
+        self, urls: list[str], max_steps: int = 3, max_concurrent: int = 3
+    ) -> dict:
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        async def _capture_one(url: str) -> dict:
+            async with semaphore:
+                req = BrowserCaptureRequest(target_url=url, max_steps=max_steps)
+                result = await self.capture(req)
+                return {"url": url, "success": True, "data": {
+                    "js_bundles": result.js_bundles,
+                    "source_maps": result.source_maps,
+                    "raw_traffic": result.network_logs,
+                    "screenshot_base64": result.screenshot_base64,
+                }}
+
+        tasks = [_capture_one(url) for url in urls]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        captures = []
+        for url, result in zip(urls, results):
+            if isinstance(result, Exception):
+                captures.append({"url": url, "success": False, "error": str(result)})
+            else:
+                captures.append(result)
+
+        js_bundles = []
+        source_maps = []
+        successful = sum(1 for c in captures if c.get("success"))
+
+        for c in captures:
+            if c.get("success") and c.get("data"):
+                js_bundles.extend(c["data"].get("js_bundles", []))
+                source_maps.extend(c["data"].get("source_maps", []))
+
+        return {
+            "success": successful > 0,
+            "captures": captures,
+            "js_bundles": js_bundles,
+            "source_maps": source_maps,
+            "total_captured": successful,
+        }
 
     async def close(self):
         if self._session and not self._session.closed:

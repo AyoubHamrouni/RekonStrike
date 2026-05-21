@@ -28,17 +28,23 @@ rekonstrike/
 ├── ARCHITECTURE.md            # stack decisions and rationale
 ├── docker-compose.yml
 ├── .github/workflows/ci.yml
+├── requirements.txt
 │
-├── rekonstrike/               # Python backend (FastAPI + LangGraph)
+├── src/rekonstrike/           # Python backend (FastAPI + LangGraph)
 │   ├── api/
-│   │   ├── server.py          # FastAPI app, lifespan, CORS
-│   │   ├── deps.py            # dependency injection
-│   │   ├── manager.py         # WebSocket connection manager
+│   │   ├── server.py          # FastAPI app, lifespan, CORS, rate limiting
+│   │   ├── deps.py            # dependency injection + user isolation
+│   │   ├── rate_limit.py      # shared slowapi limiter
+│   │   ├── connection_manager.py  # WebSocket ConnectionManager class
+│   │   ├── manager.py         # singleton manager instance (re-exports from connection_manager)
 │   │   └── routers/
 │   │       ├── scans.py       # scan start/cancel/ws
 │   │       ├── targets.py     # subdomains, live hosts, vulns
 │   │       ├── ai.py          # AI analysis endpoints
-│   │       └── agent.py       # autonomous agent SSE streaming
+│   │       ├── agent.py       # autonomous agent SSE streaming
+│   │       ├── threat_model.py  # threat model analysis (5/min rate limited)
+│   │       ├── questioning.py   # AI-guided questioning (10/min rate limited)
+│   │       └── testing.py     # guided testing workspace
 │   ├── agent/                 # LangGraph autonomous recon agent
 │   │   ├── graph.py           # StateGraph: input→strategy→executor→triage
 │   │   ├── state.py           # ReconState Pydantic model
@@ -48,17 +54,37 @@ rekonstrike/
 │   │   ├── tool_registry.py   # ToolRegistry with timeout handling
 │   │   └── tools_base.py      # ToolBase ABC
 │   ├── ai/                    # AI intelligence layer
-│   │   ├── factory.py         # get_llm() — Anthropic/OpenAI/Google/OpenRouter
+│   │   ├── factory.py         # get_llm(tier="fast"|"deep") — any provider
 │   │   ├── memory.py          # PGVector long-term memory
+│   │   ├── prompts/           # 5-section prompts (ROLE/TASK/INPUT/CONSTRAINTS/OUTPUT)
+│   │   │   ├── __init__.py    # re-exports all 11 prompt modules
+│   │   │   ├── base.py, triage.py, surface.py, advisor.py, report.py
+│   │   │   ├── threat_model.py, questioning.py, testing_advice.py
+│   │   │   ├── strategist.py, triager.py
+│   │   │   └── scope.py       # (deterministic fnmatch, no LLM)
+│   │   ├── schemas/           # pydantic input/output schemas for LLM calls
 │   │   ├── agents/
+│   │   │   ├── __init__.py    # re-exports all 5 agents
 │   │   │   ├── triage_agent.py    # LangGraph triage with tool use
 │   │   │   ├── surface_agent.py   # attack surface analyzer
 │   │   │   ├── advisor_agent.py   # per-feature test suggestions
-│   │   │   └── report_agent.py    # bug report drafter
+│   │   │   ├── report_agent.py    # bug report drafter (no CVSS)
+│   │   │   └── threat_model_agent.py  # tier-based LLM selection
 │   │   └── tools/
-│   │       └── scope_tools.py     # scope advisor
+│   │       ├── __init__.py    # fetch_http_snippet + re-exports scope_tools
+│   │       └── scope_tools.py # deterministic fnmatch scope advisor
+│   ├── models/                # SQLAlchemy ORM models (split from database.py)
+│   │   ├── __init__.py        # re-exports all models
+│   │   ├── base.py            # Base, Database, get_database, normalize_host
+│   │   ├── user.py            # User
+│   │   ├── target.py          # ScopeTarget, Subdomain, LiveHost, Endpoint, DNSRecord
+│   │   ├── program.py         # Program, ProgramScope
+│   │   ├── scan.py            # ScanSession, ScanArtifact
+│   │   ├── finding.py         # AIInsight, AIVectorMemory, Vulnerability, FindingReport, SecretFinding, TakeoverFinding
+│   │   ├── capture.py         # RawHTTPCapture, BrowserCapture
+│   │   └── testing.py         # TestingSession, TestResult
 │   ├── phases/                # deterministic pipeline phases
-│   │   ├── validation.py      # phase 0
+│   │   ├── validation.py      # phase 0 — includes browser capture
 │   │   ├── passive_recon.py   # phase 1
 │   │   ├── active_enum.py     # phase 2
 │   │   ├── dns_brute.py       # phase 2b — takeover detection
@@ -68,11 +94,17 @@ rekonstrike/
 │   │   ├── vuln_scan.py       # phase 5
 │   │   ├── roi_scoring.py     # phase 6
 │   │   └── intelligence.py    # phase 7 — AI layer
+│   ├── integrations/
+│   │   ├── browser_client.py  # HTTP client for browser-service (BrowserClient + BrowserCaptureRequest)
 │   ├── platforms/             # HackerOne, Bugcrowd, Intigriti clients
 │   ├── repositories/          # data access layer (repository pattern)
 │   ├── services/              # business logic orchestration
 │   ├── tools/                 # Go tool wrappers (subprocess calls)
-│   ├── database.py            # SQLAlchemy models
+│   │   ├── __init__.py        # re-exports all tool wrappers + BrowserCaptureClient
+│   │   ├── base.py            # BaseTool ABC
+│   │   ├── wrappers.py        # Subfinder, Httpx, Nuclei, etc.
+│   │   └── browser_client.py  # thin re-export from integrations.browser_client
+│   ├── database.py            # re-exports everything from models/ package
 │   ├── config.py              # pydantic-settings Settings
 │   ├── engine.py              # Pipeline orchestrator
 │   ├── scoring.py             # ROI scoring engine
@@ -81,26 +113,29 @@ rekonstrike/
 │
 ├── browser-service/           # TypeScript — Playwright browser automation
 │   ├── src/
-│   │   ├── index.ts           # Express HTTP server
-│   │   ├── agent.ts           # browser surface agent loop
-│   │   ├── capture.ts         # network traffic capture
-│   │   ├── extractor.ts       # JS bundle + source map analysis
-│   │   └── types.ts           # shared TypeScript interfaces
+│   │   ├── index.ts           # Express HTTP server (POST /capture, GET /health)
+│   │   ├── playwright-service.ts  # Browser capture with DNS timeout, private IP blocking
+│   │   └── schemas.ts         # CaptureRequest, CaptureResponse types
 │   ├── package.json
 │   └── tsconfig.json
 │
-├── proxy-service/             # mitmproxy addon (Python, runs embedded)
-│   ├── addon.py               # scope-filtered traffic capture addon
+├── proxy-service/             # mitmproxy addon (separate process)
+│   ├── addon.py               # scope-filtered traffic capture with async batch writer
 │   └── README.md
 │
 ├── ui/                        # Next.js + TypeScript frontend
 │   ├── src/
+│   │   ├── app/
 │   │   ├── components/
-│   │   ├── pages/
 │   │   ├── hooks/
+│   │   ├── lib/
 │   │   └── types/
 │   ├── package.json
 │   └── tsconfig.json
+│
+├── filter/                    # Go-based traffic dedup/normalization CLI
+├── tests/                     # Python test suite (148 tests)
+├── scripts/                   # developer CLI tools
 │
 └── docker/
     └── tools/
@@ -125,7 +160,7 @@ Responsibilities:
 - FastAPI REST API and WebSocket server
 - LangGraph autonomous recon agent
 - All LLM calls via LangChain abstraction
-- mitmproxy addon (embedded, same process)
+- mitmproxy addon (separate mitmproxy process — proxy-service/addon.py)
 - PostgreSQL via SQLAlchemy async
 - Phase pipeline orchestration
 - Business logic, repository pattern, services
@@ -141,7 +176,7 @@ sqlalchemy[asyncio] asyncpg alembic
 pydantic pydantic-settings
 mitmproxy
 aiohttp
-playwright  # fallback only — primary browser work is in browser-service
+playwright  # fallback only — primary browser work is browser-service (Node.js)
 typer rich
 ruff pytest pytest-asyncio
 ```
@@ -218,7 +253,7 @@ Single LLM call analyzes each program: bounty range, scope quality, asset
 types, out-of-scope restrictions, recently disclosed reports as signal.
 Output: ranked recommendation with specific reasoning.
 
-LLM model: use a fast cheap model (haiku-class). Input is small and structured.
+LLM model: use `tier="fast"`. Input is small and structured.
 
 ### 2. Reconnaissance — core, largely done
 
@@ -237,7 +272,7 @@ Single LLM call after recon completes.
 Input: structured recon output (subdomains, live hosts, tech stack, ROI scores,
 takeover findings, secret findings).
 Output: ranked target list with specific grounded reasoning.
-Model: haiku-class is sufficient. Input is structured, output is short.
+Model: `tier="fast"` is sufficient. Input is structured, output is short.
 
 ### 4. Authenticated surface mapping — core for web targets
 
@@ -281,7 +316,7 @@ Browser-service runs the perceive → decide → act loop using Playwright.
 Each step streams progress back via HTTP chunked response or Redis queue.
 Python backend writes findings to database and streams to frontend via WebSocket.
 
-Token cost: use haiku-class for navigation decisions. Reserve opus-class
+Token cost: use `tier="fast"` for navigation decisions. Reserve `tier="deep"`
 for the final analysis call only.
 
 Hard constraints the browser agent must enforce:
@@ -310,7 +345,7 @@ Answers are stored and used as additional context for the threat model call.
 ### 6. Attack surface modeling and threat modeling — core
 
 Single large LLM call. This is the most expensive call in the system.
-Use opus-class model here. The quality of this output is the core value
+Use `tier="deep"` here. The quality of this output is the core value
 proposition of the product.
 
 Input (all structured):
@@ -345,8 +380,8 @@ Finding tracker for confirmed vulnerabilities.
 ### 8. Report drafting — optional
 
 User marks finding confirmed.
-Single LLM call: haiku-class is sufficient for report structure,
-opus-class if quality of language matters to the user.
+Single LLM call: `tier="fast"` is sufficient for report structure,
+`tier="deep"` if quality of language matters to the user.
 Output formatted for target platform (HackerOne markdown, Bugcrowd format).
 
 ---
@@ -373,9 +408,9 @@ Output formatted for target platform (HackerOne markdown, Bugcrowd format).
 
 **Model selection:**
 
-- haiku-class: navigation decisions, triage, ROI scoring, program analysis,
+- fast tier (`tier="fast"`): navigation decisions, triage, ROI scoring, program analysis,
   report drafting, any call where input is small and output is short
-- opus-class: attack surface modeling, threat modeling, any call where
+- deep tier (`tier="deep"`): attack surface modeling, threat modeling, any call where
   reasoning quality directly determines the value of the output
 
 **Every LLM call must have:**
@@ -389,8 +424,8 @@ Output formatted for target platform (HackerOne markdown, Bugcrowd format).
 
 - Never send raw HTML to the LLM. Extract and structure first.
 - Never send full tool output. Summarize or select relevant fields.
-- Never run the browser agent loop with opus-class. haiku-class for steps,
-  opus-class for the single final analysis call.
+- Never run the browser agent loop with tier="deep". tier="fast" for steps,
+  tier="deep" for the single final analysis call.
 - Cap proxy capture context sent to LLM: deduplicate by method+path,
   max 200 unique endpoints, truncate long request bodies.
 
@@ -437,7 +472,7 @@ session and pass them through. Do not re-fetch from DB on every request.
 ## What is implemented and working
 
 - FastAPI server with health endpoint
-- Database models (all tables defined)
+- Database models (all 20+ tables defined, split into models/ package)
 - Repository pattern (TargetRepository, HostRepository, SessionRepository)
 - Recon phase pipeline (phases 0–7 scaffolded, phases 1–5 functional)
 - LangGraph agent (strategy → executor → triage loop)
@@ -445,32 +480,39 @@ session and pass them through. Do not re-fetch from DB on every request.
 - ROI scoring engine
 - Platform clients (HackerOne, Bugcrowd, Intigriti)
 - AI agent layer (triage, surface, advisor, report agents scaffolded)
+- AI-guided questioning flow (API endpoint + frontend UI)
+- Threat model analysis endpoint (tier="fast"|"deep")
+- Guided testing workspace (3-panel UI + 5 API endpoints)
+- TypeScript browser-service (Playwright capture with DNS timeout, private IP blocking)
+- JS bundle static analysis (inline in browser-service)
+- mitmproxy embedded addon (proxy-service/addon.py — async batch writer, scope filtering)
+- Rate limiting (slowapi — 60/min default, 5/min threat model, 10/min questioning)
+- User isolation (user_id scoping on ScopeTarget + repository layer)
+- Input sanitization (html.escape on stored XSS vectors, form-data body scrubbing)
+- Prompt library (11 standardized 5-section prompt files)
+- All model references provider-agnostic (tier="fast"|"deep", no hardcoded model names)
+- Package `__init__.py` exports with `__all__` across all subpackages
+- WebSocket ConnectionManager extracted to dedicated module
+- Phase imports use importlib for reduced circular dependency risk
 - CI pipeline (lint, test, build-frontend, docker)
 
 ## What needs to be built
 
-- mitmproxy embedded addon (proxy-service/addon.py)
 - Burp XML and Caido JSON import endpoints
-- TypeScript browser-service (entire service)
-- JS bundle static analysis
-- AI-guided questioning flow (API endpoint + frontend UI)
-- Attack surface modeling endpoint (the large threat model call)
 - Proxy capture UI (start/stop proxy, coverage visibility)
-- Guided testing workspace frontend
 - Program analysis and recommendation feature
-- Report drafting endpoint and UI
+- Report drafting frontend UI (backend agent exists)
+- Prometheus metrics
+- Structured logging with correlation IDs
+- Alembic migrations initialized
+- Frontend tests for testing workspace components
 
 ## What needs to be fixed
 
-- config.py is missing: platform_api_keys, auth_cookie, auth_token,
-  auth_local_storage, max_subdomains, data_dir, scope_file, platform,
-  program_handle, db_type fields referenced in phases but not defined
-- database.py: normalize_host function referenced in phases but not defined
-- database.py: AIVectorMemory model referenced in memory.py but not defined
-- host_repo.py: HostRepository constructor takes db_type in some phases
-  but not in its current definition
-- platforms/base.py: syntax error on bare except clause (line with
-  aiohttp.ClientError, asyncio.TimeoutError — missing parentheses)
-- api/server.py: only agent router is registered — scans, targets, ai
-  routers are missing from include_router calls
-- ci.yml: PYTHON_VERSION set to 3.14 which does not exist yet — use 3.13
+- config.py: no issues remaining — all fields defined
+- database.py: no issues remaining — re-exports from models/ package
+- models/: all 8 model files with proper imports and __all__ exports
+- host_repo.py: constructor uses session only — no inconsistency
+- platforms/base.py: no syntax errors
+- api/server.py: all routers registered
+- ci.yml: PYTHON_VERSION is 3.13 (correct)

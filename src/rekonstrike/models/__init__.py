@@ -1,20 +1,14 @@
-"""Database models and utilities — re-exported from models package.
-
-This module exists so existing imports (from rekonstrike.database import ...)
-continue to work after the models were split into src/rekonstrike/models/.
-"""
-
-from .models import (
-    Base, Database, get_database, normalize_host,
-    User,
-    ScopeTarget, Subdomain, LiveHost, Endpoint, DNSRecord,
-    Program, ProgramScope,
-    ScanSession, ScanArtifact,
+from .base import Base, Database, get_database, normalize_host
+from .user import User
+from .target import ScopeTarget, Subdomain, LiveHost, Endpoint, DNSRecord
+from .program import Program, ProgramScope
+from .scan import ScanSession, ScanArtifact
+from .finding import (
     AIInsight, AIVectorMemory,
     Vulnerability, FindingReport, SecretFinding, TakeoverFinding,
-    RawHTTPCapture, BrowserCapture,
-    TestingSession, TestResult,
 )
+from .capture import RawHTTPCapture, BrowserCapture
+from .testing import TestingSession, TestResult
 
 __all__ = [
     "Base", "Database", "get_database", "normalize_host",

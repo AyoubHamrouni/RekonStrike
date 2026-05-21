@@ -1,1 +1,2 @@
-# RekonStrike API Package
+"""API package."""
+__all__ = []
