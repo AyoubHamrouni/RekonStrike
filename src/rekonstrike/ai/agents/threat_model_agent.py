@@ -99,7 +99,7 @@ async def run_threat_model(
     if not surface.request_count and not surface.resource_families:
         return empty_assessment(target=surface.target, model=tier)
 
-    max_output_tokens = 4096 if tier in ("fast", "haiku") else 8192
+    max_output_tokens = 4096 if tier == "fast" else 8192
     if llm is None:
         llm = get_llm(settings, temperature=0.0, tier=tier, max_tokens=max_output_tokens)
 
@@ -107,7 +107,7 @@ async def run_threat_model(
 
     surface_json = surface.model_dump_json(indent=2)
 
-    max_input_chars = 100_000 if tier in ("fast", "haiku") else 200_000
+    max_input_chars = 100_000 if tier == "fast" else 200_000
     if len(surface_json) > max_input_chars:
         logger.warning(
             "Surface input too large (%d chars, max %d), truncating families",

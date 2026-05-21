@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, parse_qs, urlencode
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -198,6 +198,13 @@ class RekonStrikeCaptureAddon:
             await asyncio.sleep(5)
 
     def request(self, flow: Any) -> None:
+        try:
+            self._do_request(flow)
+        except Exception as exc:
+            self.log.exception("unhandled error in request hook: %s", exc)
+            self.filtered_count += 1
+
+    def _do_request(self, flow: Any) -> None:
         if not self.started or self.db is None:
             return
         if not self.ready:
@@ -228,7 +235,17 @@ class RekonStrikeCaptureAddon:
         body_size = len(raw_body)
         body = raw_body[: self.max_body_bytes] if raw_body else None
         if body:
-            body = scrub_body_json(body)
+            raw_content_type = next(
+                (v for k, v in (flow.request.headers or {}).items() if k.lower() == "content-type"),
+                "",
+            )
+            content_type = raw_content_type.lower()
+            if "application/x-www-form-urlencoded" in content_type:
+                body = scrub_body_form_urlencoded(body)
+            elif "application/json" in content_type or "text/json" in content_type:
+                body = scrub_body_json(body)
+            elif "multipart/form-data" in content_type:
+                body = scrub_body_form_urlencoded(body)
         payload = {
             "id": str(uuid4()),
             "program_id": self.program_id,
@@ -331,6 +348,36 @@ def _scrub_json_value(value: Any) -> Any:
     if isinstance(value, list):
         return [_scrub_json_value(v) for v in value]
     return value
+
+
+_FORM_SENSITIVE_KEYS = {
+    "password", "passwd", "secret", "api_key", "apikey", "token",
+    "credit_card", "ssn", "auth", "authorization", "jwt", "session",
+    "csrf", "csrf_token", "authenticity_token",
+}
+
+
+def scrub_body_form_urlencoded(body: bytes) -> bytes | None:
+    if not body:
+        return None
+    try:
+        decoded = body.decode("utf-8", errors="replace")
+    except UnicodeDecodeError:
+        return body
+    try:
+        params = parse_qs(decoded, keep_blank_values=True)
+    except Exception:
+        return body
+    scrubbed: dict[str, list[str]] = {}
+    for key, values in params.items():
+        if key.lower().strip() in _FORM_SENSITIVE_KEYS:
+            scrubbed[key] = ["[REDACTED]"] * len(values)
+        else:
+            scrubbed[key] = values
+    try:
+        return urlencode(scrubbed, doseq=True).encode("utf-8")
+    except Exception:
+        return body
 
 
 def _is_sensitive_json_key(key: str) -> bool:

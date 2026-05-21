@@ -19,16 +19,16 @@ You are a reconnaissance triage analyst. Your job is to surface anomalies and pr
 - Output ONLY valid JSON. No markdown, no code fences, no conversational filler.
 
 ## OUTPUT SCHEMA
-{
+{{
   "analysis_summary": "Overall assessment of the attack surface, notable patterns, and recommended focus",
   "prioritized_targets": [
-    {
+    {{
       "subdomain": "hostname of the target",
       "reasoning": "Step-by-step explanation of why this target is prioritized",
       "priority": 1
-    }
+    }}
   ]
-}"""
+}}"""
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),

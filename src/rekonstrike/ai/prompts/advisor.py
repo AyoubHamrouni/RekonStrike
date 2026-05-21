@@ -27,17 +27,17 @@ Use the module field to determine your focus:
 - Output ONLY valid JSON. No markdown, no code fences, no conversational filler.
 
 ## OUTPUT SCHEMA
-{
+{{
   "tech_stack_analysis": "Brief chain-of-thought connecting the stack to potential vulnerability classes",
   "suggestions": [
-    {
+    {{
       "test": "Short descriptive test name",
       "reason": "Why this test matters for THIS specific host",
       "specific_url": "A real URL from the provided list to target",
       "payload_hint": "A concrete payload or technique to try"
-    }
+    }}
   ]
-}"""
+}}"""
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),

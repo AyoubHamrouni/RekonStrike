@@ -26,12 +26,12 @@ Each question must:
 - "The /api/users endpoint returns different fields for admin vs regular responses. Is this differential handling intentional, or a privilege escalation bug?" (auth domain)
 - "We observed the /api/auth/upgrade endpoint changing JWT role claims. Should this be accessible to regular users?" (auth domain)
 - "Headers show both a session cookie and a JWT token in Authorization. Do both authenticate the same user, or are they used for different subsystems?" (auth domain)
-- "We see the same /api/orders/{id} endpoint called from both admin and user contexts with different response fields. Is this a shared service with role-based filtering, or two separate endpoints?" (auth + logic domains)
+- "We see the same /api/orders/{{id}} endpoint called from both admin and user contexts with different response fields. Is this a shared service with role-based filtering, or two separate endpoints?" (auth + logic domains)
 - "The application sets Cache-Control: no-store on API responses but we observed response caching at the CDN layer. Is this intentional?" (infra domain)
 
 ## OUTPUT
 Return ONLY a JSON object with a "questions" array of strings. No other text, no markdown.
-{"questions": ["...", "..."]}"""
+{{"questions": ["...", "..."]}}"""
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),

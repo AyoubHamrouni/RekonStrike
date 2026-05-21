@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +29,13 @@ async def verify_auth(
     return True
 
 
+async def get_current_user(
+    x_user_id: int | None = Header(None, alias="X-User-Id"),
+) -> int:
+    """Resolve the current user ID from header or default."""
+    return x_user_id or 1
+
+
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     async with db.get_session() as session:
         yield session
@@ -36,8 +43,9 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 
 def get_target_repo(
     session: AsyncSession = Depends(get_db_session),
+    user_id: int = Depends(get_current_user),
 ) -> TargetRepository:
-    return TargetRepository(session)
+    return TargetRepository(session, user_id=user_id)
 
 
 def get_session_repo(
@@ -61,8 +69,8 @@ def get_agent_runner() -> ReconAgentRunner:
 def get_scan_service(
     session: AsyncSession = Depends(get_db_session),
     tm=Depends(get_tm),
+    user_id: int = Depends(get_current_user),
 ) -> ScanService:
-    # ScanService will now take repositories instead of the Database wrapper
-    target_repo = TargetRepository(session)
+    target_repo = TargetRepository(session, user_id=user_id)
     session_repo = SessionRepository(session)
     return ScanService(settings, session, tm, target_repo, session_repo)

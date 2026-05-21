@@ -136,7 +136,15 @@ export class PlaywrightService {
     }
   }
 
+  private ensureUrlScheme(url: string): string {
+    if (!/^https?:\/\//i.test(url)) {
+      return `https://${url}`;
+    }
+    return url;
+  }
+
   async capture(req: CaptureRequest): Promise<CaptureResponse> {
+    req.target_url = this.ensureUrlScheme(req.target_url);
     await this.assertCaptureAllowed(req);
 
     const startTime = Date.now();
@@ -170,34 +178,41 @@ export class PlaywrightService {
       networkLogs.push(entry);
     });
 
-    page.on("response", async (response) => {
-      const url = response.url();
-      const existing = pendingLogs.get(url);
-      if (existing) {
-        existing.status = response.status();
-        existing.response_headers = redactHeaders(
-          Object.fromEntries(Object.entries(response.headers()))
-        );
-        pendingLogs.delete(url);
-      }
-
-      const contentType = response.headers()["content-type"] || "";
-      if (contentType.includes("javascript") || url.match(/\.(js|mjs)\b/i)) {
-        try {
-          const body = await response.body();
-          const content = body.toString("utf-8");
-          jsBundles.push({ url, content: truncateBody(content) });
-
-          const smMatch = content.match(
-            /\/\/# sourceMappingURL=(.+\.map)\b/
+    page.on("response", (response) => {
+      try {
+        const url = response.url();
+        const existing = pendingLogs.get(url);
+        if (existing) {
+          existing.status = response.status();
+          existing.response_headers = redactHeaders(
+            Object.fromEntries(Object.entries(response.headers()))
           );
-          if (smMatch) {
-            const sourceMapUrl = new URL(smMatch[1], url).href;
-            sourceMaps.push({ url, source_map_url: sourceMapUrl });
-          }
-        } catch {
-          logger.debug("could not read response body for %s", url);
+          pendingLogs.delete(url);
         }
+
+        const contentType = response.headers()["content-type"] || "";
+        if (contentType.includes("javascript") || url.match(/\.(js|mjs)\b/i)) {
+          response.body().then((body) => {
+            try {
+              const content = body.toString("utf-8");
+              jsBundles.push({ url, content: truncateBody(content) });
+
+              const smMatch = content.match(
+                /\/\/# sourceMappingURL=(.+\.map)\b/
+              );
+              if (smMatch) {
+                const sourceMapUrl = new URL(smMatch[1], url).href;
+                sourceMaps.push({ url, source_map_url: sourceMapUrl });
+              }
+            } catch {
+              logger.debug("could not process JS body for %s", url);
+            }
+          }).catch(() => {
+            logger.debug("could not read response body for %s", url);
+          });
+        }
+      } catch (err) {
+        logger.warn("response handler error: %s", String(err));
       }
     });
 

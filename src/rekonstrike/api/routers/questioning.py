@@ -1,13 +1,14 @@
 import logging
 import json
 import hashlib
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from langchain_core.output_parsers import JsonOutputParser
 
 from ..deps import verify_auth, get_target_repo, get_db_session, settings
+from ..rate_limit import limiter
 from ...repositories.target_repo import TargetRepository
 from ...database import AIInsight
 from ...ai.factory import get_llm
@@ -30,7 +31,9 @@ class QuestioningSession(BaseModel):
 
 
 @router.post("/generate")
+@limiter.limit("10/minute")
 async def generate_questions(
+    request: Request,
     target_id: int,
     program_id: int | None = None,
     auth: bool = Depends(verify_auth),
@@ -165,12 +168,11 @@ async def _fetch_raw_captures(
         result = await session.execute(stmt, {"program_id": program_id, "limit": limit})
     else:
         stmt = text("""
-            SELECT method, url, hostname, path, query_string, headers, body_size, timestamp
-            FROM raw_http_captures
-            WHERE hostname IN (
-                SELECT subdomain FROM subdomains WHERE target_id = :target_id
-            )
-            ORDER BY timestamp DESC
+            SELECT c.method, c.url, c.hostname, c.path, c.query_string, c.headers, c.body_size, c.timestamp
+            FROM raw_http_captures c
+            INNER JOIN subdomains s ON c.hostname = s.subdomain
+            WHERE s.target_id = :target_id
+            ORDER BY c.timestamp DESC
             LIMIT :limit
         """)
         result = await session.execute(stmt, {"target_id": target_id, "limit": limit})

@@ -19,12 +19,12 @@ You are an exploitation advisor. Given a threat model finding, suggest concrete 
 - Output ONLY valid JSON. No markdown, no code fences, no conversational filler.
 
 ## OUTPUT SCHEMA
-{
+{{
   "exploitation_steps": [
-    {"step": 1, "action": "description of the step", "tool": "optional tool name", "payload": "optional example payload"}
+    {{"step": 1, "action": "description of the step", "tool": "optional tool name", "payload": "optional example payload"}}
   ],
   "tools_recommended": ["tool1", "tool2"]
-}"""
+}}"""
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),

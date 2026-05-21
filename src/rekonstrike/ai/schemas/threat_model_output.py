@@ -41,7 +41,7 @@ class ThreatAssessment(BaseModel):
     session_recommendations: list[str] = Field(default_factory=list)
 
 
-def empty_assessment(target: str = "", model: str = "haiku") -> ThreatAssessment:
+def empty_assessment(target: str = "", model: str = "fast") -> ThreatAssessment:
     import datetime
     return ThreatAssessment(
         target=target,

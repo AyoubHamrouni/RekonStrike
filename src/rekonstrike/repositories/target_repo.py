@@ -5,30 +5,43 @@ from ..database import ScopeTarget, Subdomain
 
 
 class TargetRepository:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, user_id: int = 1):
         self.session = session
+        self.user_id = user_id
 
     async def get_or_create_target(self, target: str, target_type: str) -> ScopeTarget:
         result = await self.session.execute(
-            select(ScopeTarget).where(ScopeTarget.target == target)
+            select(ScopeTarget).where(
+                ScopeTarget.target == target,
+                ScopeTarget.user_id == self.user_id,
+            )
         )
         obj = result.scalar_one_or_none()
         if obj is None:
-            obj = ScopeTarget(target=target, target_type=target_type)
+            obj = ScopeTarget(target=target, target_type=target_type, user_id=self.user_id)
             self.session.add(obj)
             await self.session.flush()
             await self.session.refresh(obj)
         return obj
 
-    async def get_target_by_id(self, target_id: int) -> Optional[ScopeTarget]:
+    async def get(self, target_id: int) -> Optional[ScopeTarget]:
         result = await self.session.execute(
-            select(ScopeTarget).where(ScopeTarget.id == target_id)
+            select(ScopeTarget).where(
+                ScopeTarget.id == target_id,
+                ScopeTarget.user_id == self.user_id,
+            )
         )
         return result.scalar_one_or_none()
 
+    async def get_target_by_id(self, target_id: int) -> Optional[ScopeTarget]:
+        return await self.get(target_id)
+
     async def list_targets(self, limit: int = 100) -> Sequence[ScopeTarget]:
         result = await self.session.execute(
-            select(ScopeTarget).order_by(ScopeTarget.created_at.desc()).limit(limit)
+            select(ScopeTarget)
+            .where(ScopeTarget.user_id == self.user_id)
+            .order_by(ScopeTarget.created_at.desc())
+            .limit(limit)
         )
         return result.scalars().all()
 

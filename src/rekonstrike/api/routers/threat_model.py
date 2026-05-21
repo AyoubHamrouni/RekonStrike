@@ -1,8 +1,9 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..deps import verify_auth, get_target_repo, get_db_session, settings
+from ..rate_limit import limiter
 from ...repositories.target_repo import TargetRepository
 from ...database import AIInsight
 from ...ai.schemas.threat_model_input import build_llm_input, Anomaly
@@ -17,7 +18,9 @@ router = APIRouter(prefix="/targets/{target_id}/threat-model", tags=["threat_mod
 
 
 @router.post("/analyze")
+@limiter.limit("5/minute")
 async def analyze_threat_model(
+    request: Request,
     target_id: int,
     tier: str = Query("fast", description="Analysis tier: 'fast' (cheap, ~3-5s) or 'deep' (thorough, ~20-40s)"),
     program_id: int | None = Query(None, description="Optional program ID for scope filtering"),
@@ -139,12 +142,11 @@ async def _fetch_raw_captures(
         result = await session.execute(stmt, {"program_id": program_id, "limit": limit})
     else:
         stmt = text("""
-            SELECT method, url, hostname, path, query_string, headers, body_size, timestamp
-            FROM raw_http_captures
-            WHERE hostname IN (
-                SELECT subdomain FROM subdomains WHERE target_id = :target_id
-            )
-            ORDER BY timestamp DESC
+            SELECT c.method, c.url, c.hostname, c.path, c.query_string, c.headers, c.body_size, c.timestamp
+            FROM raw_http_captures c
+            INNER JOIN subdomains s ON c.hostname = s.subdomain
+            WHERE s.target_id = :target_id
+            ORDER BY c.timestamp DESC
             LIMIT :limit
         """)
         result = await session.execute(stmt, {"target_id": target_id, "limit": limit})

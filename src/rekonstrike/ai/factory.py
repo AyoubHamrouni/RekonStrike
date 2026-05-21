@@ -47,9 +47,11 @@ def get_llm(settings: Any, temperature: float = 0.0, tier: str = "", **kwargs) -
         logger.warning("No API key configured for AI provider '%s'; using no-op LLM.", provider)
         return NoopLLM()
     
+    resolved_model = kwargs.pop("model", settings.default_ai_model)
+
     if provider == "openai":
         return ChatOpenAI(
-            model=settings.default_ai_model,
+            model=resolved_model,
             api_key=key,
             base_url=settings.ai_base_urls.get("openai") or None,
             temperature=temperature,
@@ -57,7 +59,7 @@ def get_llm(settings: Any, temperature: float = 0.0, tier: str = "", **kwargs) -
         )
     elif provider == "anthropic":
         return ChatAnthropic(
-            model=settings.default_ai_model,
+            model=resolved_model,
             api_key=key,
             base_url=settings.ai_base_urls.get("anthropic") or None,
             temperature=temperature,
@@ -65,14 +67,14 @@ def get_llm(settings: Any, temperature: float = 0.0, tier: str = "", **kwargs) -
         )
     elif provider in ["google", "gemini"]:
         return ChatGoogleGenerativeAI(
-            model=settings.default_ai_model,
+            model=resolved_model,
             google_api_key=key,
             temperature=temperature,
             **kwargs
         )
     elif provider == "openrouter":
         return ChatOpenAI(
-            model=settings.default_ai_model,
+            model=resolved_model,
             api_key=key,
             base_url=settings.ai_base_urls.get("openrouter") or "https://openrouter.ai/api/v1",
             temperature=temperature,
@@ -81,7 +83,7 @@ def get_llm(settings: Any, temperature: float = 0.0, tier: str = "", **kwargs) -
     else:
         logger.warning(f"Unknown AI provider '{provider}', falling back to OpenAI format.")
         return ChatOpenAI(
-            model=settings.default_ai_model,
+            model=resolved_model,
             api_key=settings.ai_api_keys.get(provider),
             base_url=settings.ai_base_urls.get(provider) or None,
             temperature=temperature,

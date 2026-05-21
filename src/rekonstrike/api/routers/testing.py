@@ -1,5 +1,6 @@
 """Testing workspace API — session management and test result submission."""
 
+import html
 import logging
 from datetime import datetime, timezone
 
@@ -213,19 +214,38 @@ async def submit_result(
     if testing_session.status != "active":
         raise HTTPException(status_code=400, detail=f"Session is {testing_session.status}. Resume or start a new session.")
 
+    # Validate finding_id against threat model
+    if testing_session.threat_model_id:
+        insight_stmt = select(AIInsight).where(AIInsight.id == testing_session.threat_model_id)
+        insight_result = await db_session.execute(insight_stmt)
+        insight = insight_result.scalar_one_or_none()
+        if insight:
+            assessment = insight.result if isinstance(insight.result, dict) else __import__("json").loads(insight.result)
+            findings = assessment.get("findings", [])
+            if body.finding_id < 0 or body.finding_id >= len(findings):
+                raise HTTPException(status_code=400, detail=f"Invalid finding_id {body.finding_id}. Must be 0-{len(findings) - 1}.")
+    else:
+        raise HTTPException(status_code=400, detail="No threat model associated with this session.")
+
+    # Sanitize stored data to prevent XSS
+    sanitized_payload = html.escape(body.payload)
+    sanitized_notes = html.escape(body.notes) if body.notes else None
+
     response_body = body.response_body
-    if response_body and len(response_body) > 5120:
-        response_body = response_body[:5120]
+    if response_body:
+        if len(response_body) > 5120:
+            response_body = response_body[:5120]
+        response_body = html.escape(response_body)
 
     test_result = TestResult(
         testing_session_id=testing_session.id,
         finding_id=body.finding_id,
         endpoint=body.endpoint,
-        payload=body.payload,
+        payload=sanitized_payload,
         response_status=body.response_status,
         response_body=response_body,
         confirmed=body.confirmed,
-        notes=body.notes,
+        notes=sanitized_notes,
     )
     db_session.add(test_result)
 

@@ -22,6 +22,9 @@ class ScopeTarget(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     target: Mapped[str] = mapped_column(String(255), unique=True)
     target_type: Mapped[str] = mapped_column(String(50), default="wildcard")
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), default=1
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
 
@@ -342,6 +345,7 @@ class TestingSession(Base):
 class TestResult(Base):
     __tablename__ = "test_results"
     __table_args__ = (
+        UniqueConstraint("testing_session_id", "finding_id", name="uq_session_finding"),
         Index("ix_test_result_session_confirmed", "testing_session_id", "confirmed"),
         Index("ix_test_result_finding", "finding_id"),
     )

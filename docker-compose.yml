@@ -16,6 +16,8 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       BROWSER_SERVICE_URL: http://browser-service:3001
       BROWSER_SERVICE_TOKEN: ${BROWSER_SERVICE_TOKEN:-}
+      AI_FAST_MODEL: ${AI_FAST_MODEL:-}
+      AI_DEEP_MODEL: ${AI_DEEP_MODEL:-}
     volumes:
       - ./data:/app/data
       - /var/run/docker.sock:/var/run/docker.sock

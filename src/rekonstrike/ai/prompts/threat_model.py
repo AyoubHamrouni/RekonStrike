@@ -22,13 +22,13 @@ You are a threat triage analyst. Scan the captured web surface for the most obvi
 - Output ONLY valid JSON. No markdown, no code fences, no conversational filler.
 
 ## OUTPUT SCHEMA
-{
+{{
   "findings": [
-    {
+    {{
       "finding_type": "idor",
       "finding_subtype": "confirmed",
       "risk_rank": "high",
-      "affected_endpoints": [{"method": "GET", "path": "/api/users/1", "parameters": ["id"], "evidence": "Integer ID parameter with low entropy"}],
+      "affected_endpoints": [{{"method": "GET", "path": "/api/users/1", "parameters": ["id"], "evidence": "Integer ID parameter with low entropy"}}],
       "exploitation_description": "Brief description of how an attacker would exploit this",
       "exploitation_difficulty": "easy",
       "data_at_risk": ["user_profiles"],
@@ -36,11 +36,11 @@ You are a threat triage analyst. Scan the captured web surface for the most obvi
       "confidence": 0.85,
       "recommended_test": "Specific payload or technique to confirm",
       "exploitation_chain": []
-    }
+    }}
   ],
   "privilege_escalation_chains": [],
   "session_recommendations": ["Brief actionable recommendation"]
-}"""
+}}"""
 
 # ── Deep tier — for powerful/capable models ─────────────────────────────────
 
@@ -66,13 +66,13 @@ You are a senior threat modeler. Perform deep analysis of the captured web surfa
 - Output ONLY valid JSON. No markdown, no code fences, no conversational filler.
 
 ## OUTPUT SCHEMA
-{
+{{
   "findings": [
-    {
+    {{
       "finding_type": "idor",
       "finding_subtype": "confirmed",
       "risk_rank": "high",
-      "affected_endpoints": [{"method": "GET", "path": "/api/users/1", "parameters": ["id"], "evidence": "Integer ID with low entropy, appears in response"}],
+      "affected_endpoints": [{{"method": "GET", "path": "/api/users/1", "parameters": ["id"], "evidence": "Integer ID with low entropy, appears in response"}}],
       "exploitation_description": "Step-by-step description of the exploitation path with specific technical detail",
       "exploitation_difficulty": "easy",
       "data_at_risk": ["user_profiles", "email_addresses"],
@@ -80,25 +80,25 @@ You are a senior threat modeler. Perform deep analysis of the captured web surfa
       "confidence": 0.92,
       "recommended_test": "Send GET /api/users/1 and GET /api/users/2 with same session, compare responses",
       "exploitation_chain": ["Requires valid user session"]
-    }
+    }}
   ],
   "privilege_escalation_chains": [
-    {
+    {{
       "from_role": "user",
       "to_role": "admin",
       "path": ["GET /api/users/1", "POST /api/auth/upgrade"],
       "finding_indices": [0, 1]
-    }
+    }}
   ],
   "session_recommendations": ["Rotate JWT on role change", "Add CSRF tokens to state-changing endpoints"]
-}"""
+}}"""
 
 
 def get_prompt(tier: str):
     from langchain_core.messages import SystemMessage, HumanMessage
     from langchain_core.prompts import ChatPromptTemplate
 
-    if tier in ("deep", "opus"):
+    if tier == "deep":
         system = SystemMessage(content=SYSTEM_PROMPT_DEEP)
     else:
         system = SystemMessage(content=SYSTEM_PROMPT_FAST)
@@ -110,21 +110,25 @@ def get_prompt_with_context(tier: str, user_answers: list[dict[str, str]] | None
     from langchain_core.messages import SystemMessage, HumanMessage
     from langchain_core.prompts import ChatPromptTemplate
 
-    if tier in ("deep", "opus"):
+    if tier == "deep":
         system = SystemMessage(content=SYSTEM_PROMPT_DEEP)
     else:
         system = SystemMessage(content=SYSTEM_PROMPT_FAST)
 
     user_parts = []
     if user_answers:
-        answers_text = "\n".join(
-            f"Q: {a.get('question', '')}\nA: {a.get('answer', '')}"
-            for a in user_answers
-        )
+        capped = user_answers[:10]
+        lines = []
+        for a in capped:
+            q = a.get('question', '')[:500]
+            ans = a.get('answer', '')[:1000]
+            lines.append(f"Q: {q}\nA: {ans}")
+        answers_text = "\n".join(lines)
         user_parts.append(
-            f"USER CONTEXT:\nThe user provided the following answers about the application.\n"
-            f"Treat these as authoritative — if a user confirms or denies specific behavior, trust them.\n\n"
+            f"--- BEGIN USER CONTEXT (answers about the app, authoritative) ---\n"
             f"{answers_text}\n"
+            f"--- END USER CONTEXT ---\n"
+            f"The above answers are from the user. Treat them as ground truth for the target application.\n"
         )
     user_parts.append("{surface_json}")
 

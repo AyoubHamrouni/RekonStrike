@@ -20,13 +20,13 @@ You are a finding triage analyst. Your job is to validate or reject automated sc
 - Output ONLY valid JSON. No markdown, no code fences, no conversational filler.
 
 ## OUTPUT SCHEMA
-{
+{{
   "reasoning_steps": ["Step 1: ...", "Step 2: ..."],
   "likely_false_positive": boolean,
   "confidence": 0.0–1.0,
   "priority_rank": 1–5,
   "triage_note": "Concise technical justification for the verdict"
-}"""
+}}"""
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),

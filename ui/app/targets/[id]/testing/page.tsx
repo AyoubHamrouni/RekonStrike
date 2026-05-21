@@ -133,8 +133,10 @@ export default function TestingWorkspacePage() {
     try {
       await updateTestingSession(targetId, "paused");
       setSession((s) => (s ? { ...s, status: "paused" } : s));
-    } catch {
-      // ignore
+      setError(null);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to pause session";
+      setError(msg);
     }
   };
 
@@ -142,8 +144,10 @@ export default function TestingWorkspacePage() {
     try {
       await updateTestingSession(targetId, "completed");
       setSession((s) => (s ? { ...s, status: "completed" } : s));
-    } catch {
-      // ignore
+      setError(null);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to complete session";
+      setError(msg);
     }
   };
 
@@ -218,6 +222,12 @@ export default function TestingWorkspacePage() {
           {session.status}
         </Badge>
       </div>
+
+      {error && (
+        <div className="bg-rose-500/10 border border-rose-500/30 rounded-lg px-4 py-2 text-sm text-rose-400">
+          {error}
+        </div>
+      )}
 
       {/* 3-panel layout */}
       <div className="grid grid-cols-12 gap-4" style={{ minHeight: "calc(100vh - 200px)" }}>
