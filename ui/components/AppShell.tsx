@@ -22,7 +22,7 @@ const nav = [
   { to: "/workspace", label: "Dashboard", icon: LayoutDashboard },
   { to: "/targets", label: "Targets", icon: Target },
   { to: "/scans", label: "Scans", icon: Radar },
-  { to: "/findings", label: "Vulnerabilities", icon: ShieldAlert },
+  { to: "/vulnerabilities", label: "Vulnerabilities", icon: ShieldAlert },
   { to: "/testing", label: "Testing", icon: FlaskConical },
   { to: "/agent", label: "AI Agent", icon: Bot },
   { to: "/programs", label: "Programs", icon: Trophy },

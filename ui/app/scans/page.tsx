@@ -2,26 +2,30 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
-  Crosshair, Globe, Server,
-  CheckCircle, Loader2, AlertTriangle, RefreshCw,
+  Radar,
+  Play,
+  StopCircle,
+  Plus,
+  X,
+  Crosshair,
+  Globe,
+  Server,
+  CheckCircle,
+  Loader2,
+  AlertTriangle,
+  RefreshCw,
+  Activity,
 } from "lucide-react";
-import { fetchPhases, startScan } from "@/lib/api";
+import { Button } from "@/components/ui/Button";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { fetchPhases, fetchSessions, startScan } from "@/lib/api";
+import { relativeTime, statusColor } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import type { Phase, Session } from "@/types";
 import toast from "react-hot-toast";
-import type { Phase } from "@/types";
-import type { ComponentType } from "react";
-
-interface TargetTypeConfig {
-  value: string;
-  label: string;
-  icon: ComponentType<{ size?: number; className?: string }>;
-  desc: string;
-}
-
-const TARGET_TYPES: TargetTypeConfig[] = [
-  { value: "domain", label: "Domain", icon: Globe, desc: "Discover subdomains, crawl endpoints, and scan for vulnerabilities across the entire domain scope." },
-  { value: "ip", label: "IP Range", icon: Server, desc: "Scan IP ranges for open ports, services, and hosted web applications." },
-];
 
 const LEARN_PHASES: Record<number, string> = {
   0: "Validates the target and loads scope rules to ensure everything is configured correctly.",
@@ -33,29 +37,45 @@ const LEARN_PHASES: Record<number, string> = {
   6: "Calculates ROI scores and consolidates all findings into a prioritized report.",
 };
 
+interface TargetTypeConfig {
+  value: string;
+  label: string;
+  icon: typeof Globe;
+  desc: string;
+}
+
+const TARGET_TYPES: TargetTypeConfig[] = [
+  { value: "domain", label: "Domain", icon: Globe, desc: "Discover subdomains, crawl endpoints, and scan for vulnerabilities." },
+  { value: "ip", label: "IP Range", icon: Server, desc: "Scan IP ranges for open ports, services, and hosted web applications." },
+];
+
 export default function ScansPage() {
   const router = useRouter();
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [phases, setPhases] = useState<Phase[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [phasesLoading, setPhasesLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+
+  // Modal state
   const [target, setTarget] = useState("");
   const [targetType, setTargetType] = useState("domain");
-  const [phases, setPhases] = useState<Phase[]>([]);
   const [selectedPhases, setSelectedPhases] = useState<Set<number>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [phasesLoading, setPhasesLoading] = useState(true);
-  const [phasesError, setPhasesError] = useState<string | null>(null);
 
   useEffect(() => {
-    setPhasesLoading(true);
-    setPhasesError(null);
+    fetchSessions(50)
+      .then(setSessions)
+      .catch(() => {})
+      .finally(() => setSessionsLoading(false));
+
     fetchPhases()
       .then((data) => {
         setPhases(data);
         setSelectedPhases(new Set(data.map((p) => p.id)));
       })
-      .catch((err: Error) => {
-        setPhasesError(err.message || "Failed to load phases");
-        toast.error("Failed to load phases");
-      })
+      .catch(() => {})
       .finally(() => setPhasesLoading(false));
   }, []);
 
@@ -80,6 +100,7 @@ export default function ScansPage() {
         phases: Array.from(selectedPhases),
       });
       toast.success("Scan started");
+      setShowModal(false);
       router.push(`/scans/${result.session_id}`);
     } catch (err) {
       toast.error((err as Error).message || "Failed to start scan");
@@ -91,182 +112,317 @@ export default function ScansPage() {
   const togglePhase = (phaseId: number) => {
     setSelectedPhases((prev) => {
       const next = new Set(prev);
-      if (next.has(phaseId)) next.delete(phaseId);
-      else next.add(phaseId);
+      next.has(phaseId) ? next.delete(phaseId) : next.add(phaseId);
       return next;
     });
   };
 
-  const toggleAll = () => {
-    if (selectedPhases.size === phases.length) {
-      setSelectedPhases(new Set());
-    } else {
-      setSelectedPhases(new Set(phases.map((p) => p.id)));
-    }
-  };
-
   return (
-    <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-xl font-bold text-slate-200">New Reconnaissance Scan</h1>
-        <p className="text-sm text-slate-500 mt-1">Configure and launch a new security assessment</p>
+    <div className="space-y-6 animate-fade-in pb-12">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="label-eyebrow">recon pipeline</div>
+          <h1 className="text-2xl font-black text-white tracking-tight mt-1">Scans</h1>
+          <p className="text-sm text-dim mt-1">
+            Sessions, phases, and live workflow telemetry. WebSocket-driven progress.
+          </p>
+        </div>
+        <Button
+          variant="primary"
+          size="md"
+          icon={<Plus size={14} />}
+          onClick={() => setShowModal(true)}
+        >
+          New Scan
+        </Button>
       </div>
 
-      <div className="bg-surface border border-white/5 rounded-xl p-5 space-y-5">
-        <div>
-          <label htmlFor="target-input" className="text-xs font-medium text-slate-400 mb-1.5 block">Target</label>
-          <input
-            id="target-input"
-            type="text"
-            value={target}
-            onChange={(e) => setTarget(e.target.value)}
-            placeholder={targetType === "domain" ? "example.com" : "192.168.1.0/24"}
-            className={`w-full px-3 py-2 bg-slate-800 border rounded-lg text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-purple-600/40 transition-colors ${
-              errors.target ? "border-rose-500" : "border-white/5"
-            }`}
-            aria-invalid={!!errors.target}
-          />
-          {errors.target && (
-            <p className="text-xs text-rose-400 mt-1 flex items-center gap-1">
-              <AlertTriangle size={11} /> {errors.target}
-            </p>
-          )}
-        </div>
+      {/* Main 2/3 + 1/3 grid */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {/* Sessions table */}
+        <div className="lg:col-span-2">
+          <div className="card-border overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border px-5 py-3">
+              <h3 className="text-sm font-semibold text-white">Sessions</h3>
+              <span className="label-eyebrow">{sessions.length} total</span>
+            </div>
 
-        <div>
-          <label className="text-xs font-medium text-slate-400 mb-2 block">Target Type</label>
-          <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Target type">
-            {TARGET_TYPES.map(({ value, label, icon: Icon, desc }) => (
-              <button
-                key={value}
-                onClick={() => setTargetType(value)}
-                role="radio"
-                aria-checked={targetType === value}
-                className={`text-left p-3 rounded-lg border transition-all cursor-pointer ${
-                  targetType === value
-                    ? "bg-purple-600/10 border-purple-600/30"
-                    : "bg-slate-800 border-white/5 hover:border-white/10"
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <Icon size={16} className={targetType === value ? "text-purple-500" : "text-slate-500"} />
-                  <span className={`text-sm font-medium ${targetType === value ? "text-purple-400" : "text-slate-200"}`}>{label}</span>
-                  {targetType === value && <CheckCircle size={14} className="ml-auto text-purple-500" />}
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed">{desc}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-surface border border-white/5 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-slate-200">Phases</h2>
-          {!phasesLoading && !phasesError && (
-            <button
-              onClick={toggleAll}
-              className="text-xs text-purple-500 hover:text-purple-400 transition-colors cursor-pointer"
-              type="button"
-            >
-              {selectedPhases.size === phases.length ? "Clear All" : "Select All"}
-            </button>
-          )}
-        </div>
-
-        {phasesLoading ? (
-          <div className="space-y-3">
-            {[...Array(7)].map((_, i) => (
-              <div key={i} className="flex items-center gap-3 p-3">
-                <div className="skeleton w-5 h-5 rounded shrink-0" />
-                <div className="flex-1 space-y-1">
-                  <div className="skeleton h-4 w-40 rounded" />
-                  <div className="skeleton h-3 w-64 rounded" />
-                </div>
+            {sessionsLoading ? (
+              <div className="p-5 space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
               </div>
-            ))}
+            ) : sessions.length === 0 ? (
+              <div className="p-8">
+                <EmptyState
+                  title="No scan sessions"
+                  description="Create a scan to start reconnaissance."
+                  action={
+                    <Button variant="primary" size="sm" icon={<Plus size={12} />} onClick={() => setShowModal(true)}>
+                      New Scan
+                    </Button>
+                  }
+                />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left">
+                      <th className="label-eyebrow px-5 py-3">ID</th>
+                      <th className="label-eyebrow py-3">Workflow</th>
+                      <th className="label-eyebrow py-3">Phase</th>
+                      <th className="label-eyebrow py-3">Started</th>
+                      <th className="label-eyebrow py-3">Status</th>
+                      <th className="label-eyebrow px-5 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessions.map((s) => (
+                      <tr
+                        key={s.id}
+                        className="border-b border-border last:border-none hover:bg-white/[0.02] transition-colors cursor-pointer"
+                        onClick={() => router.push(`/scans/${s.id}`)}
+                      >
+                        <td className="mono px-5 py-3 text-dim">#{s.id}</td>
+                        <td className="py-3 text-white font-medium">{s.workflow || "recon"}</td>
+                        <td className="py-3 text-muted">{s.current_phase ?? "—"}</td>
+                        <td className="py-3 text-muted">{relativeTime(s.started_at)}</td>
+                        <td className="py-3">
+                          <span className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider", statusColor(s.status))}>
+                            {s.status === "running" && <Activity size={10} className="animate-pulse" />}
+                            {s.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          {s.status === "running" ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); }}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-red/40 bg-red/10 px-2.5 py-1 text-xs text-red hover:bg-red/20 transition-colors cursor-pointer"
+                            >
+                              <StopCircle className="h-3 w-3" /> Cancel
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); }}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted hover:text-white transition-colors cursor-pointer"
+                            >
+                              <Play className="h-3 w-3" /> Replay
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        ) : phasesError ? (
-          <div className="flex flex-col items-center py-8 text-center">
-            <AlertTriangle size={20} className="text-rose-400 mb-2" />
-            <p className="text-sm text-slate-500 mb-3">Failed to load phases</p>
-            <button
-              onClick={() => {
-                setPhasesLoading(true);
-                setPhasesError(null);
-                fetchPhases()
-                  .then((data) => { setPhases(data); setSelectedPhases(new Set(data.map((p) => p.id))); })
-                  .catch((err: Error) => setPhasesError(err.message))
-                  .finally(() => setPhasesLoading(false));
-              }}
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition-colors cursor-pointer"
-            >
-              <RefreshCw size={12} /> Retry
-            </button>
+        </div>
+
+        {/* Registered phases */}
+        <div className="card-border p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <div className="label-eyebrow">pipeline</div>
+              <h3 className="mt-1 text-base font-semibold text-white">Registered phases</h3>
+            </div>
+            <Radar className="h-4 w-4 text-accent" />
           </div>
-        ) : phases.length === 0 ? (
-          <p className="text-sm text-slate-500 py-4 text-center">No phases available</p>
-        ) : (
-          <>
-            <div className="space-y-1" role="group" aria-label="Scan phases">
-              {phases.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => togglePhase(p.id)}
-                  role="checkbox"
-                  aria-checked={selectedPhases.has(p.id)}
-                  className={`w-full text-left p-3 rounded-lg border transition-all cursor-pointer ${
-                    selectedPhases.has(p.id)
-                      ? "bg-purple-600/10 border-purple-600/30"
-                      : "bg-slate-800 border-white/5 hover:border-white/10"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5 transition-colors ${
-                      selectedPhases.has(p.id)
-                        ? "bg-purple-600 text-white"
-                        : "bg-slate-800 border border-white/5"
-                    }`}>
-                      {selectedPhases.has(p.id) && <CheckCircle size={12} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-200">
-                        Phase {p.number || p.id}: {p.name}
-                      </div>
-                      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
-                        {p.description || LEARN_PHASES[p.id] || ""}
-                      </p>
-                    </div>
-                  </div>
-                </button>
+          {phasesLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-10 w-full" />
               ))}
             </div>
-            {errors.phases && (
-              <p className="text-xs text-rose-400 mt-2 flex items-center gap-1">
-                <AlertTriangle size={11} /> {errors.phases}
-              </p>
-            )}
-          </>
-        )}
+          ) : phases.length === 0 ? (
+            <div className="py-6 text-center text-xs text-dim">
+              <ol className="space-y-3">
+                {Object.entries(LEARN_PHASES).map(([num, desc]) => (
+                  <li key={num} className="flex gap-3">
+                    <div className="mono flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent/10 text-xs font-semibold text-accent ring-1 ring-accent/30">
+                      {num}
+                    </div>
+                    <div className="min-w-0 text-left">
+                      <div className="text-[11px] text-dim">{desc}</div>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : (
+            <ol className="space-y-3">
+              {phases.map((p) => (
+                <li key={p.id} className="flex gap-3">
+                  <div className="mono flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent/10 text-xs font-semibold text-accent ring-1 ring-accent/30">
+                    {p.number ?? p.id}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-white">{p.name}</div>
+                    <div className="text-[11px] text-dim">
+                      {p.description || LEARN_PHASES[p.id] || ""}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       </div>
 
-      <button
-        onClick={handleSubmit}
-        disabled={submitting || phasesLoading}
-        className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors cursor-pointer"
-      >
-        {submitting ? (
-          <>
-            <Loader2 size={16} className="animate-spin" />
-            Starting Scan...
-          </>
-        ) : (
-          <>
-            <Crosshair size={16} />
-            Start Scan
-          </>
-        )}
-      </button>
+      {/* New Scan Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="glass-panel w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto animate-scale-in">
+            <div className="flex items-center justify-between px-6 pt-6 pb-2">
+              <div>
+                <div className="label-eyebrow">new reconnaissance</div>
+                <h2 className="text-lg font-bold text-white mt-1">Configure Scan</h2>
+              </div>
+              <button
+                onClick={() => setShowModal(false)}
+                className="rounded-md p-1.5 text-dim hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              {/* Target input */}
+              <div>
+                <label htmlFor="scan-target" className="label-eyebrow mb-1.5 block">Target</label>
+                <input
+                  id="scan-target"
+                  type="text"
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  placeholder={targetType === "domain" ? "example.com" : "192.168.1.0/24"}
+                  className={cn(
+                    "w-full px-3 py-2.5 bg-bg border rounded-lg text-sm text-white placeholder:text-dim focus:outline-none focus:border-accent/50 transition-colors mono",
+                    errors.target ? "border-red" : "border-border"
+                  )}
+                />
+                {errors.target && (
+                  <p className="text-xs text-red mt-1 flex items-center gap-1">
+                    <AlertTriangle size={11} /> {errors.target}
+                  </p>
+                )}
+              </div>
+
+              {/* Target type */}
+              <div>
+                <label className="label-eyebrow mb-2 block">Target Type</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {TARGET_TYPES.map(({ value, label, icon: Icon, desc }) => (
+                    <button
+                      key={value}
+                      onClick={() => setTargetType(value)}
+                      className={cn(
+                        "text-left p-3 rounded-lg border transition-all cursor-pointer",
+                        targetType === value
+                          ? "bg-accent/10 border-accent/30 ring-1 ring-accent/20"
+                          : "bg-surface-2/40 border-border hover:border-border-strong"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Icon size={16} className={targetType === value ? "text-accent" : "text-dim"} />
+                        <span className={cn("text-sm font-medium", targetType === value ? "text-accent" : "text-white")}>{label}</span>
+                        {targetType === value && <CheckCircle size={14} className="ml-auto text-accent" />}
+                      </div>
+                      <p className="text-[11px] text-dim leading-relaxed">{desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Phase selection */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="label-eyebrow">Phases</label>
+                  <button
+                    onClick={() => {
+                      if (selectedPhases.size === phases.length) setSelectedPhases(new Set());
+                      else setSelectedPhases(new Set(phases.map((p) => p.id)));
+                    }}
+                    className="text-[10px] text-accent hover:text-accent/80 transition-colors cursor-pointer font-semibold uppercase tracking-wider"
+                  >
+                    {selectedPhases.size === phases.length ? "Clear All" : "Select All"}
+                  </button>
+                </div>
+                <div className="space-y-1 max-h-52 overflow-y-auto">
+                  {phases.length > 0 ? (
+                    phases.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => togglePhase(p.id)}
+                        className={cn(
+                          "w-full text-left p-2.5 rounded-lg border transition-all cursor-pointer flex items-center gap-3",
+                          selectedPhases.has(p.id)
+                            ? "bg-accent/10 border-accent/30"
+                            : "bg-surface-2/20 border-border hover:border-border-strong"
+                        )}
+                      >
+                        <div className={cn(
+                          "w-4 h-4 rounded flex items-center justify-center shrink-0 transition-colors",
+                          selectedPhases.has(p.id) ? "bg-accent text-white" : "bg-surface-2 border border-border"
+                        )}>
+                          {selectedPhases.has(p.id) && <CheckCircle size={10} />}
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-xs font-medium text-white">
+                            Phase {p.number || p.id}: {p.name}
+                          </span>
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    Object.entries(LEARN_PHASES).map(([num, desc]) => (
+                      <div key={num} className="p-2.5 rounded-lg bg-accent/5 border border-accent/10 flex items-center gap-3">
+                        <div className="mono flex h-5 w-5 shrink-0 items-center justify-center rounded bg-accent text-[10px] font-bold text-white">
+                          {num}
+                        </div>
+                        <span className="text-[11px] text-dim truncate">{desc.slice(0, 60)}…</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {errors.phases && (
+                  <p className="text-xs text-red mt-1 flex items-center gap-1">
+                    <AlertTriangle size={11} /> {errors.phases}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 pb-6 pt-2 flex items-center gap-3">
+              <button
+                onClick={() => setShowModal(false)}
+                className="flex-1 px-4 py-2.5 border border-border rounded-lg text-sm text-muted hover:text-white hover:border-border-strong transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-accent hover:bg-accent/90 disabled:opacity-40 text-white rounded-lg text-sm font-medium transition-colors cursor-pointer shadow-glow"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" /> Starting…
+                  </>
+                ) : (
+                  <>
+                    <Crosshair size={14} /> Start Scan
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
