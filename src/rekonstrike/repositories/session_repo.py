@@ -45,3 +45,12 @@ class SessionRepository:
             select(ScanSession).order_by(ScanSession.started_at.desc()).limit(limit)
         )
         return result.scalars().all()
+
+    async def get_sessions_by_target(self, target_id: int, limit: int = 20) -> Sequence[ScanSession]:
+        result = await self.session.execute(
+            select(ScanSession)
+            .where(ScanSession.target_id == target_id)
+            .order_by(ScanSession.started_at.desc())
+            .limit(limit)
+        )
+        return result.scalars().all()

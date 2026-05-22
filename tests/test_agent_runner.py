@@ -1,6 +1,6 @@
 import json
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 
 from rekonstrike.agent.runner import ReconAgentRunner
 from rekonstrike.agent.state import ReconState

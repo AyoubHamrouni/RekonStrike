@@ -160,8 +160,17 @@ export interface AgentSessionRequest {
 }
 
 export interface AgentFeedbackRequest {
-  action: "continue" | "stop";
+  action: "continue" | "stop" | "interrupt";
   message?: string;
+}
+
+export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed";
+
+export interface AgentEvent {
+  id: string;
+  type: string;
+  ts: string;
+  payload: unknown;
 }
 
 export interface ScanRequest {

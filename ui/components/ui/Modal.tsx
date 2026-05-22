@@ -79,14 +79,14 @@ export function Modal({ open, onClose, title, children, size = "md" }: ModalProp
         role="dialog"
         aria-modal="true"
         aria-label={title || "Dialog"}
-        className={`relative w-full ${sizeStyles[size]} bg-surface border border-white/10 rounded-2xl shadow-2xl animate-scale-in max-h-[85vh] flex flex-col`}
+        className={`relative w-full ${sizeStyles[size]} card-border shadow-2xl animate-scale-in max-h-[85vh] flex flex-col`}
       >
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-            <h2 className="text-sm font-bold text-slate-200">{title}</h2>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+            <h2 className="text-sm font-bold text-white">{title}</h2>
             <button
               onClick={onClose}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-all cursor-pointer"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-dim hover:text-white hover:bg-surface-2 transition-all cursor-pointer"
             >
               <X size={15} />
             </button>

@@ -1,5 +1,4 @@
 """Pipeline engine and phase registry tests."""
-import pytest
 
 from rekonstrike.engine import phase, get_registered_phases, _phase_registry
 

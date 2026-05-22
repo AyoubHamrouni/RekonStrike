@@ -14,6 +14,8 @@ from .models import (
     Vulnerability, FindingReport, SecretFinding, TakeoverFinding,
     RawHTTPCapture, BrowserCapture,
     TestingSession, TestResult,
+    ProgramAnalysis,
+    Report,
 )
 
 __all__ = [
@@ -26,4 +28,6 @@ __all__ = [
     "Vulnerability", "FindingReport", "SecretFinding", "TakeoverFinding",
     "RawHTTPCapture", "BrowserCapture",
     "TestingSession", "TestResult",
+    "ProgramAnalysis",
+    "Report",
 ]

@@ -1,6 +1,5 @@
 """Tests for BrowserClient HTTP client."""
 
-import pytest
 
 from rekonstrike.integrations.browser_client import BrowserCaptureRequest, BrowserCaptureResult
 

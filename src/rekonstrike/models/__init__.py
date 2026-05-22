@@ -9,6 +9,8 @@ from .finding import (
 )
 from .capture import RawHTTPCapture, BrowserCapture
 from .testing import TestingSession, TestResult
+from .program_analysis import ProgramAnalysis
+from .report import Report
 
 __all__ = [
     "Base", "Database", "get_database", "normalize_host",
@@ -20,4 +22,6 @@ __all__ = [
     "Vulnerability", "FindingReport", "SecretFinding", "TakeoverFinding",
     "RawHTTPCapture", "BrowserCapture",
     "TestingSession", "TestResult",
+    "ProgramAnalysis",
+    "Report",
 ]

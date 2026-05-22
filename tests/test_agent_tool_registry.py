@@ -1,5 +1,4 @@
 import pytest
-from unittest.mock import AsyncMock, patch
 from rekonstrike.agent.tool_registry import ToolRegistry
 from rekonstrike.agent.tools_base import ToolBase
 

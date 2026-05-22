@@ -287,6 +287,12 @@ export async function startAgentSession(
   });
 }
 
+export async function fetchAgentSessions(
+  targetId: number
+): Promise<{ id: number; status: string; created_at: string; updated_at?: string }[]> {
+  return req(`/targets/${targetId}/agent/sessions`);
+}
+
 export async function fetchAgentState(
   targetId: number,
   sessionId: string

@@ -1,13 +1,10 @@
 import pytest
-from unittest.mock import AsyncMock, patch
 
 from rekonstrike.agent.phases import (
-    register_phase,
     list_phases,
     run_phase,
 )
 from rekonstrike.agent.state import ReconState
-from rekonstrike.agent.tool_registry import ToolRegistry
 
 
 @pytest.fixture

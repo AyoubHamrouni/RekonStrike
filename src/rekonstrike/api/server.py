@@ -18,6 +18,9 @@ from rekonstrike.api.routers.ai import router as ai_router
 from rekonstrike.api.routers.threat_model import router as threat_model_router
 from rekonstrike.api.routers.questioning import router as questioning_router
 from rekonstrike.api.routers.testing import router as testing_router
+from rekonstrike.api.routers.program_analysis import router as program_analysis_router
+from rekonstrike.api.routers.report import router as report_router
+from rekonstrike.api.routers.report import download_router as report_download_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -89,3 +92,6 @@ app.include_router(ai_router, prefix="/api/v1")
 app.include_router(threat_model_router, prefix="/api/v1")
 app.include_router(questioning_router, prefix="/api/v1")
 app.include_router(testing_router, prefix="/api/v1")
+app.include_router(program_analysis_router, prefix="/api/v1")
+app.include_router(report_router, prefix="/api/v1")
+app.include_router(report_download_router, prefix="/api/v1")

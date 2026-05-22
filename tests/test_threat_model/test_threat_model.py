@@ -1,11 +1,9 @@
-import json
 import pytest
 
 from rekonstrike.ai.schemas.threat_model_input import build_llm_input
 from rekonstrike.ai.schemas.threat_model_output import (
     empty_assessment,
     compute_risk_summary,
-    ThreatAssessment,
 )
 from rekonstrike.ai.agents.threat_model_agent import (
     run_threat_model,

@@ -182,9 +182,12 @@ async def _run_agent_task(
             # Check for user feedback before processing
             if not session.feedback_queue.empty():
                 feedback = await session.feedback_queue.get()
+                action = feedback.get("action", "interrupt")
                 await session.event_queue.put(
-                    ("feedback", {"action": feedback.get("action", "interrupt"), "message": feedback.get("message")})
+                    ("feedback", {"action": action, "message": feedback.get("message")})
                 )
+                if action in ("interrupt", "stop"):
+                    raise asyncio.CancelledError()
 
             await _event_callback(session, node_name, node_output)
 
@@ -223,6 +226,26 @@ async def _run_agent_task(
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
+
+
+@router.get("/sessions")
+async def list_agent_sessions(
+    target_id: int,
+    limit: int = 20,
+    auth: bool = Depends(verify_auth),
+    session_repo: SessionRepository = Depends(get_session_repo),
+):
+    sessions = await session_repo.get_sessions_by_target(target_id, limit=limit)
+    return [
+        {
+            "session_id": s.id,
+            "status": s.status,
+            "workflow": s.workflow,
+            "created_at": s.started_at.isoformat() if s.started_at else None,
+            "error": s.error_message,
+        }
+        for s in sessions
+    ]
 
 
 @router.post("/run", response_model=AgentRunResponse)
