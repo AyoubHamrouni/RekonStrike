@@ -1,10 +1,12 @@
 import express from "express";
+import helmet from "helmet";
 import cors from "cors";
 import bodyParser from "body-parser";
 import { PlaywrightService } from "./playwright-service";
 import type { CaptureRequest } from "./schemas";
 
 const app = express();
+app.use(helmet());
 app.use(cors());
 app.use(bodyParser.json({ limit: "10mb" }));
 
